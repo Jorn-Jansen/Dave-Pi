@@ -19,6 +19,13 @@ APPS = {  # what you say → the app on the TV
     "videoland": "nl.rtl.videoland.v2", "npo": "nl.uitzendinggemist", "hbo": "com.wbd.stream", "max": "com.wbd.stream",
     "plex": "com.plexapp.android", "twitch": "tv.twitch.android.app", "kodi": "org.xbmc.kodi",
 }
+# The app's own link, which most TVs open more reliably than "launch this package" (the ones Home Assistant uses)
+LINKS = {
+    "com.netflix.ninja": "https://www.netflix.com/title", "com.google.android.youtube.tv": "https://www.youtube.com",
+    "com.amazon.amazonvideo.livingroom": "https://app.primevideo.com", "com.disney.disneyplus": "https://www.disneyplus.com",
+    "com.spotify.tv.android": "spotify://", "com.plexapp.android": "plex://", "tv.twitch.android.app": "twitch://home",
+    "com.wbd.stream": "https://play.max.com",
+}
 KEYS = {  # what the AI can press
     "power": "POWER", "volume_up": "VOLUME_UP", "volume_down": "VOLUME_DOWN", "mute": "VOLUME_MUTE", "home": "HOME", "back": "BACK",
     "play_pause": "MEDIA_PLAY_PAUSE", "play": "MEDIA_PLAY", "pause": "MEDIA_PAUSE", "next": "MEDIA_NEXT", "previous": "MEDIA_PREVIOUS",
@@ -132,9 +139,18 @@ def control(action, value=""):
                     package = value  # a package name itself, like com.ziggo.tv
                 if not remote.is_on:
                     remote.send_key_command("POWER")
-                    await asyncio.sleep(3)
-                remote.send_launch_app_command(package)
-                return f"app {value}"
+                    await asyncio.sleep(4)
+                # The app's own link first; if the TV doesn't switch to it, the package itself
+                for target in [t for t in (LINKS.get(package), package) if t]:
+                    remote.send_launch_app_command(target)
+                    for _ in range(12):  # up to 6 s: did it open?
+                        await asyncio.sleep(0.5)
+                        if (remote.current_app or "") == package:
+                            return config.say(f"{value} is open on the TV.", f"{value} staat open op de tv.")
+                now = remote.current_app or "?"
+                print(f"(tv: sent {package}, the TV now shows {now})")
+                return config.say(f"I asked the TV to open {value}, but it still shows {now}. Is the app installed on the TV?",
+                                  f"Ik heb de tv gevraagd {value} te openen, maar hij laat nog {now} zien. Staat de app op de tv?")
             key = KEYS.get(action) or KEYS.get(value)
             if not key:
                 raise TVError(f"Unknown TV action {action} {value}")
@@ -143,6 +159,6 @@ def control(action, value=""):
                 await asyncio.sleep(0.15)
             return f"key {key}"
         finally:
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(1)  # (let the last command go out before hanging up)
             remote.disconnect()
     return asyncio.run(go())
