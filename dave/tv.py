@@ -122,8 +122,14 @@ def control(action, value=""):
                 return (config.say("on", "aan") if remote.is_on else config.say("off (standby)", "uit (standby)")) + \
                        (f", app {app}" if app and remote.is_on else "") + (f", volume {volume}" if volume is not None and remote.is_on else "")
             if action == "app":
-                want = (value or "").lower().replace(" ", "")
-                package = next((p for name, p in APPS.items() if name in want), value)
+                want = (value or "").lower().replace(" ", "").replace("+", "")
+                apps = {**APPS, **{k.lower().replace(" ", ""): v for k, v in (config.get("tv_apps") or {}).items()}}  # (your own: sudo dave tv add-app)
+                package = next((p for name, p in sorted(apps.items(), key=lambda x: -len(x[0])) if name in want), None)
+                if not package:
+                    if "." not in value:
+                        raise TVError(config.say(f"I don't know the app {value}. Add it with: sudo dave tv add-app \"{value}\" <its package name>",
+                                                 f"De app {value} ken ik niet. Voeg hem toe met: sudo dave tv add-app \"{value}\" <pakketnaam>"))
+                    package = value  # a package name itself, like com.ziggo.tv
                 if not remote.is_on:
                     remote.send_key_command("POWER")
                     await asyncio.sleep(3)

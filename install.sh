@@ -16,6 +16,7 @@ echo "== Dave in /opt/dave =="
 mkdir -p /opt/dave /etc/dave /opt/dave/models
 rm -rf /opt/dave/dave
 cp -r "$HERE/dave" /opt/dave/
+echo "$HERE" > /opt/dave/source   # (where the code came from: sudo dave update pulls the newest there)
 if [ ! -d /opt/dave/venv ]; then python3 -m venv /opt/dave/venv; fi
 /opt/dave/venv/bin/pip install -q --upgrade pip
 /opt/dave/venv/bin/pip install -q vosk androidtvremote2

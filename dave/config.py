@@ -27,6 +27,7 @@ DEFAULTS = {
     "tv_host": "",
     "tv_mac": "",
     "tv_name": "",
+    "tv_apps": {},                  # your own apps: {"Ziggo GO": "com.ziggo.tv"} (sudo dave tv add-app)
     # SmartThings (sudo dave smartthings token … or sudo dave smartthings login)
     "smartthings_token": "",
     "smartthings_client_id": "",

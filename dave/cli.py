@@ -10,8 +10,10 @@
   sudo dave smartthings login          connect SmartThings for good (OAuth)
   sudo dave smartthings list | status <device>
   sudo dave tv setup | on | off | status   the TV (Google TV / Android TV), paired once with a code on the TV
+  sudo dave tv app netflix | apps | add-app "Ziggo GO" com.ziggo.tv
   sudo dave test-speaker | test-mic    check the sound
   sudo dave status                     what's set up, and the service
+  sudo dave update                     get the newest Dave from GitHub and install it
   sudo dave config [key] [value]       see or change one setting
 """
 
@@ -32,7 +34,7 @@ def main(argv=None):
         return 0
     command, rest = args[0], args[1:]
     handlers = {"run": run, "ask": ask, "chat": chat, "say": say, "setup": setup, "hue": hue_command, "smartthings": smartthings_command, "tv": tv_command,
-                "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command}
+                "update": update, "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command}
     if command not in handlers:
         print(f"Onbekend commando: {command}\n{__doc__}")
         return 1
@@ -244,6 +246,17 @@ def tv_command(rest):
         print(f"✅ Gekoppeld met {name}. Probeer: sudo dave tv off   en   sudo dave tv on")
     elif sub in ("on", "off", "status"):
         print(tv.control(sub))
+    elif sub == "add-app":
+        if len(rest) < 3:
+            print('Gebruik: sudo dave tv add-app "Ziggo GO" com.ziggo.tv')
+            print("De pakketnaam vind je in de Google Play-link van de app: play.google.com/store/apps/details?id=<pakketnaam>")
+            return 1
+        apps = dict(config.get("tv_apps") or {})
+        apps[" ".join(rest[1:-1])] = rest[-1]
+        config.set("tv_apps", apps)
+        print(f"✅ {' '.join(rest[1:-1])} toegevoegd. Probeer: sudo dave tv app {' '.join(rest[1:-1])}")
+    elif sub == "apps":
+        print(", ".join(sorted(set(tv.APPS) | set(config.get("tv_apps") or {}))))
     else:
         print(tv.control(sub, " ".join(rest[1:])))
 
@@ -258,6 +271,25 @@ def config_command(rest):
         value = " ".join(rest[1:])
         config.set(rest[0], float(value) if rest[0] == "mic_sensitivity" else value)
         print(f"{rest[0]} = {config.shown(rest[0], config.get(rest[0]))}")
+
+
+def update(_):
+    """The newest version from GitHub, installed (and the service restarted)."""
+    try:
+        source = open("/opt/dave/source").read().strip()
+    except OSError:
+        print("Ik weet niet waar de code staat. Doe: cd ~/Dave-Pi && git pull && sudo ./install.sh")
+        return 1
+    print(f"Bijwerken vanuit {source}…")
+    owner = os.stat(source).st_uid  # (git pull as the user who cloned it, so the files stay theirs)
+    pull = ["git", "-C", source, "pull", "--ff-only"]
+    if os.geteuid() == 0 and owner != 0:
+        import pwd
+        pull = ["sudo", "-u", pwd.getpwuid(owner).pw_name] + pull
+    if subprocess.run(pull).returncode != 0:
+        print("⚠ git pull lukte niet (zie hierboven).")
+        return 1
+    return subprocess.run(["bash", os.path.join(source, "install.sh")]).returncode
 
 
 # --- Testing ---
