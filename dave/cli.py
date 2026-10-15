@@ -45,6 +45,9 @@ def main(argv=None):
     except (groq.GroqError, hue.HueError, smartthings.SmartThingsError) as e:
         print(f"⚠ {e}")
         return 1
+    except OSError as e:  # no connection, a missing program…: a short line, not a wall of text
+        print(f"⚠ {getattr(e, 'reason', None) or e}")
+        return 1
 
 
 # --- The speaker ---

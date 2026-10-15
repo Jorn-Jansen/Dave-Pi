@@ -22,14 +22,24 @@ def _base():
     bridge, user = config.get("hue_bridge"), config.get("hue_user")
     if not bridge or not user:
         raise HueError(config.say("Hue isn't set up yet: sudo dave hue setup", "Hue is nog niet ingesteld: sudo dave hue setup"))
-    return f"http://{bridge}/api/{user}"
+    return f"{bridge}/api/{user}"
+
+
+def _bridge_request(method, address, body=None):
+    """To the bridge: https first (newer bridges want that; it has its own certificate), then plain http."""
+    last = None
+    for scheme in ("https", "http"):
+        try:
+            return web.json_request(method, f"{scheme}://{address}", body, timeout=8, insecure=True)
+        except OSError as e:
+            last = e
+    host = address.split("/")[0]
+    raise HueError(config.say(f"I can't reach the Hue Bridge at {host}. Check its address in the Hue app (Settings → Bridges → ⓘ) and run: sudo dave hue setup",
+                              f"Ik kan de Hue Bridge op {host} niet bereiken. Check het adres in de Hue-app (Instellingen → Bridges → ⓘ) en doe: sudo dave hue setup")) from last
 
 
 def _call(method, path, body=None):
-    try:
-        status, data = web.json_request(method, _base() + path, body, timeout=8)
-    except OSError as e:
-        raise HueError(config.say("I can't reach the Hue Bridge.", "Ik kan de Hue Bridge niet bereiken.")) from e
+    status, data = _bridge_request(method, _base() + path, body)
     if isinstance(data, list) and data and "error" in data[0]:
         raise HueError(data[0]["error"].get("description", "Hue error"))
     return data
@@ -46,7 +56,7 @@ def discover():
 
 def pair(bridge):
     """After pressing the bridge's round button: a username for Dave. Raises HueError when the button wasn't pressed."""
-    _, data = web.json_request("POST", f"http://{bridge}/api", {"devicetype": "dave#raspberrypi"}, timeout=8)
+    _, data = _bridge_request("POST", f"{bridge}/api", {"devicetype": "dave#raspberrypi"})
     if isinstance(data, list) and data:
         if "success" in data[0]:
             return data[0]["success"]["username"]
