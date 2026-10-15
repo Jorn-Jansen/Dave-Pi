@@ -47,6 +47,9 @@ Bijwerken later: `cd Dave-Pi && git pull && sudo ./install.sh`
 
 Daarna: *"is de wasmachine klaar?"*, *"hoe lang duurt de droger nog?"*, *"zet de tv uit"*.
 
+**De tv (Google TV / Android TV, zoals Philips The One):** `sudo dave tv setup` — typ het IP-adres van de tv en de code die op
+de tv verschijnt. Zet op de tv ook *inschakelen via netwerk* aan. Daarna: *"hey Dave, zet de tv aan"*, *"tv harder"*, *"zet Netflix op de tv"*.
+
 ## Altijd aan
 
 ```bash

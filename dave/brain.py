@@ -9,7 +9,7 @@ import re
 import subprocess
 import time
 
-from . import config, groq, hue, smartthings, timers
+from . import config, groq, hue, smartthings, timers, tv
 
 PERSONALITIES = {
     "normal": "",
@@ -49,6 +49,11 @@ TOOLS = [
            "capability": _s("For command: e.g. switch, washerOperatingState, dryerOperatingState, audioVolume"),
            "command": _s("For command: e.g. on, off, setMachineState, setVolume"),
            "arguments": {"type": "array", "items": {"type": "string"}, "description": "For command: its arguments, e.g. ['pause'] or ['20']"}}, ["action"]),
+    _tool("tv", "The TV (Google TV / Android TV): turn it on or off, its volume ('TV louder': volume_up, value 3 = three steps), mute, "
+          "what's on ('status'), open an app ('put Netflix on the TV': action app, value Netflix), or press a key (home, back, play_pause, ok, up…).",
+          {"action": {"type": "string", "enum": ["on", "off", "status", "app", "volume_up", "volume_down", "mute", "home", "back", "play_pause",
+                                                 "play", "pause", "next", "previous", "up", "down", "left", "right", "ok", "channel_up", "channel_down", "input", "settings"]},
+           "value": _s("For app: the app's name (Netflix, YouTube, Disney+, Videoland…); for volume: how many steps")}, ["action"]),
     _tool("timer", "Timers: set one ('a timer for 10 minutes for the pizza'), list them ('how long does my timer still take?') or cancel.",
           {"action": {"type": "string", "enum": ["set", "list", "cancel"]},
            "seconds": {"type": "number", "description": "For set: how long, in seconds"},
@@ -66,7 +71,7 @@ def _system():
     personality = PERSONALITIES.get(config.get("personality"), "")
     return (f"{personality}\n\nYou are {name}, a voice assistant on a smart speaker in the user's home (a Raspberry Pi), like a Google Home. "
             f"Answer in {language} unless the user speaks another language. Your answers are spoken: one or two short sentences, plain speech, "
-            "no lists, no markdown, no emoji, no links. Use your commands for the lights (Hue), Samsung devices (SmartThings), timers and "
+            "no lists, no markdown, no emoji, no links. Use your commands for the lights (Hue), the TV, Samsung devices (SmartThings), timers and "
             "the volume; when the user asks for several things at once, do all of them. Look things up on the web for news, weather and facts. "
             f"It's {time.strftime('%A %d %B %Y, %H:%M')} now. Only end with a question when you really need an answer (then the speaker keeps " +
             "listening); never add filler questions like 'Anything else?' or 'Is er verder nog iets?', just stop after the answer.").strip()
@@ -88,6 +93,8 @@ def _run(name, args):
                 return smartthings.status(device)
             arguments = [int(a) if isinstance(a, str) and a.lstrip("-").isdigit() else a for a in (args.get("arguments") or [])]  # (numbers as numbers)
             return smartthings.command(device, args.get("capability", "switch"), args.get("command", ""), arguments)
+        if name == "tv":
+            return tv.control(args.get("action", "status"), str(args.get("value") or ""))
         if name == "timer":
             action = args.get("action")
             if action == "set":
@@ -100,7 +107,7 @@ def _run(name, args):
         if name == "set_personality":
             config.set("personality", args.get("personality", "normal"))
             return f"personality is now {config.get('personality')}"
-    except (hue.HueError, smartthings.SmartThingsError) as e:
+    except (hue.HueError, smartthings.SmartThingsError, tv.TVError) as e:
         return f"Failed: {e}"
     except Exception as e:
         return f"Failed ({type(e).__name__}): {e}"

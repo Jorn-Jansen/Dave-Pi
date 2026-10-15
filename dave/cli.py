@@ -9,6 +9,7 @@
   sudo dave smartthings token <token>  connect SmartThings with a personal token (valid 24 hours)
   sudo dave smartthings login          connect SmartThings for good (OAuth)
   sudo dave smartthings list | status <device>
+  sudo dave tv setup | on | off | status   the TV (Google TV / Android TV), paired once with a code on the TV
   sudo dave test-speaker | test-mic    check the sound
   sudo dave status                     what's set up, and the service
   sudo dave config [key] [value]       see or change one setting
@@ -21,7 +22,7 @@ import sys
 import threading
 import time
 
-from . import brain, config, groq, hue, listen, smartthings, timers, voice
+from . import brain, config, groq, hue, listen, smartthings, timers, tv, voice
 
 
 def main(argv=None):
@@ -30,7 +31,7 @@ def main(argv=None):
         print(__doc__)
         return 0
     command, rest = args[0], args[1:]
-    handlers = {"run": run, "ask": ask, "chat": chat, "say": say, "setup": setup, "hue": hue_command, "smartthings": smartthings_command,
+    handlers = {"run": run, "ask": ask, "chat": chat, "say": say, "setup": setup, "hue": hue_command, "smartthings": smartthings_command, "tv": tv_command,
                 "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command}
     if command not in handlers:
         print(f"Onbekend commando: {command}\n{__doc__}")
@@ -42,7 +43,7 @@ def main(argv=None):
     except KeyboardInterrupt:
         print()
         return 130
-    except (groq.GroqError, hue.HueError, smartthings.SmartThingsError) as e:
+    except (groq.GroqError, hue.HueError, smartthings.SmartThingsError, tv.TVError) as e:
         print(f"⚠ {e}")
         return 1
     except OSError as e:  # no connection, a missing program…: a short line, not a wall of text
@@ -231,6 +232,22 @@ def smartthings_command(rest):
         return 1
 
 
+def tv_command(rest):
+    sub = rest[0] if rest else "status"
+    if sub == "setup":
+        print("Zet de tv aan. Het IP-adres staat op de tv bij Instellingen → Netwerk en internet → (je wifi) of in je router.")
+        print("Tip: zet op de tv ook 'Inschakelen via wifi/netwerk' (of 'Snel starten') aan, zodat Dave hem uit standby kan halen.")
+        host = input(f"IP-adres van de tv [{config.get('tv_host') or 'bv. 192.168.68.60'}]: ").strip() or config.get("tv_host")
+        if not host:
+            return 1
+        name = tv.setup(host, lambda: input("Er staat nu een code op de tv. Typ hem hier: "))
+        print(f"✅ Gekoppeld met {name}. Probeer: sudo dave tv off   en   sudo dave tv on")
+    elif sub in ("on", "off", "status"):
+        print(tv.control(sub))
+    else:
+        print(tv.control(sub, " ".join(rest[1:])))
+
+
 def config_command(rest):
     if not rest:
         for key, value in config.load().items():
@@ -284,6 +301,7 @@ def status(_):
     print(f"Hue: {'✅ ' + config.get('hue_bridge') if config.get('hue_user') else '❌ (sudo dave hue setup)'}")
     st = "OAuth" if config.get("smartthings_refresh") else "token" if config.get("smartthings_token") else ""
     print(f"SmartThings: {'✅ ' + st if st else '❌ (sudo dave smartthings token …)'}")
+    print(f"TV: {'✅ ' + (config.get('tv_name') or config.get('tv_host')) if config.get('tv_host') else '❌ (sudo dave tv setup)'}")
     print(f"Wekwoord: \"{config.get('wake_phrase')}\" · model {'✅' if os.path.isdir(listen.MODEL) else '❌ ' + listen.MODEL}")
     result = subprocess.run(["systemctl", "is-active", "dave"], capture_output=True, text=True)
     print(f"Service: {result.stdout.strip() or 'onbekend'}  (logs: journalctl -u dave -f)")

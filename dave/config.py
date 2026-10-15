@@ -23,6 +23,10 @@ DEFAULTS = {
     # Philips Hue (sudo dave hue setup)
     "hue_bridge": "",
     "hue_user": "",
+    # The TV (Android TV / Google TV, e.g. Philips The One): sudo dave tv setup
+    "tv_host": "",
+    "tv_mac": "",
+    "tv_name": "",
     # SmartThings (sudo dave smartthings token … or sudo dave smartthings login)
     "smartthings_token": "",
     "smartthings_client_id": "",

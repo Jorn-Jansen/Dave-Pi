@@ -18,7 +18,7 @@ rm -rf /opt/dave/dave
 cp -r "$HERE/dave" /opt/dave/
 if [ ! -d /opt/dave/venv ]; then python3 -m venv /opt/dave/venv; fi
 /opt/dave/venv/bin/pip install -q --upgrade pip
-/opt/dave/venv/bin/pip install -q vosk
+/opt/dave/venv/bin/pip install -q vosk androidtvremote2
 
 echo "== Wake word model (offline, ~40 MB) =="
 MODEL=vosk-model-small-en-us-0.15
