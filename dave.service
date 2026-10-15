@@ -1,0 +1,14 @@
+[Unit]
+Description=Dave, the smart speaker
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/dave run
+Restart=always
+RestartSec=5
+User=root
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

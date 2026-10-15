@@ -1,0 +1,88 @@
+"""Dave's settings: /etc/dave/config.json (only readable by root: it holds your keys)."""
+
+import json
+import os
+
+PATH = os.environ.get("DAVE_CONFIG", "/etc/dave/config.json")
+
+DEFAULTS = {
+    "name": "Dave",
+    "language": "nl-NL",            # what Dave speaks (nl-NL or en-US)
+    "personality": "normal",        # normal, chill, hyped, butler, sarcastic
+    "wake_phrase": "hey dave",
+    "groq_key": "",                 # free at console.groq.com/keys: the AI and speech recognition
+    # The voice: Azure (natural, online) when there's a key, otherwise Piper (offline) if installed, otherwise espeak-ng
+    "azure_key": "",
+    "azure_region": "westeurope",
+    "azure_voice": "nl-NL-FennaNeural",
+    "piper_model": "",              # e.g. /opt/dave/voices/nl_NL-mls-medium.onnx
+    # Sound
+    "mic_device": "default",        # ALSA device, see `arecord -L`
+    "speaker_device": "default",    # see `aplay -L`
+    "mic_sensitivity": 1.0,         # higher = picks up quieter speech
+    # Philips Hue (sudo dave hue setup)
+    "hue_bridge": "",
+    "hue_user": "",
+    # SmartThings (sudo dave smartthings token … or sudo dave smartthings login)
+    "smartthings_token": "",
+    "smartthings_client_id": "",
+    "smartthings_client_secret": "",
+    "smartthings_redirect": "https://httpbin.org/get",
+    "smartthings_refresh": "",
+    "smartthings_access": "",
+    "smartthings_expires": 0,
+}
+
+SECRETS = {"groq_key", "azure_key", "hue_user", "smartthings_token", "smartthings_client_secret", "smartthings_refresh", "smartthings_access"}
+
+_cache = None
+
+
+def load():
+    global _cache
+    if _cache is None:
+        data = {}
+        try:
+            with open(PATH, encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            pass
+        except (OSError, ValueError) as e:
+            print(f"(couldn't read {PATH}: {e})")
+        _cache = {**DEFAULTS, **data}
+    return _cache
+
+
+def get(key):
+    return load().get(key, DEFAULTS.get(key))
+
+
+def set(key, value):
+    load()[key] = value
+    save()
+
+
+def save():
+    os.makedirs(os.path.dirname(PATH), exist_ok=True)
+    temp = PATH + ".tmp"
+    with open(temp, "w", encoding="utf-8") as f:
+        json.dump(load(), f, indent=2, ensure_ascii=False)
+    os.chmod(temp, 0o600)
+    os.replace(temp, PATH)
+
+
+def dutch():
+    return str(get("language")).lower().startswith("nl")
+
+
+def say(english, dutch_text):
+    """English or Dutch, in Dave's language."""
+    return dutch_text if dutch() else english
+
+
+def shown(key, value):
+    """A setting for showing on screen: keys only partly."""
+    if key in SECRETS and value:
+        text = str(value)
+        return text[:4] + "…" + text[-4:] if len(text) > 12 else "…"
+    return value
