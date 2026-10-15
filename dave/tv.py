@@ -140,8 +140,14 @@ def control(action, value=""):
                 if not remote.is_on:
                     remote.send_key_command("POWER")
                     await asyncio.sleep(4)
+                before = remote.current_app or ""
+                if before == package:  # still "open" in the background (e.g. from before standby): home first, so opening it is real
+                    remote.send_key_command("HOME")
+                    await asyncio.sleep(1.5)
+                print(f"(tv: was showing {before or '?'}, now {remote.current_app or '?'})")
                 # The app's own link first; if the TV doesn't switch to it, the package itself
                 for target in [t for t in (LINKS.get(package), package) if t]:
+                    print(f"(tv: opening {target})")
                     remote.send_launch_app_command(target)
                     for _ in range(12):  # up to 6 s: did it open?
                         await asyncio.sleep(0.5)
