@@ -68,6 +68,7 @@ In de terminal: `sudo dave thermostaat`, `sudo dave thermostaat 20.5`, `sudo dav
 - *"Zet een timer van 10 minuten voor de pizza"*, *"hoe lang duurt mijn timer nog?"*
 - *"Herinner me morgen om 9 uur aan de vuilnis"*, *"elke werkdag om 8 uur: pillen"*
 - *"Maak me om 7 uur wakker"*, *"zet een wekker om 6:30 op werkdagen"*. Hij gaat af tot je *"hey Dave, stop"* of *"snooze"* zegt.
+- Iets later laten gebeuren: *"zet over 15 seconden de tv aan"*, *"doe om 23:00 de lampen uit"*, *"elke dag om 7 uur de keuken aan"*, *"wat staat er gepland?"*
 - *"Start de stopwatch"*, *"ronde"*, *"pauze"*, *"ga verder"*, *"stop de stopwatch"*
 
 Alles blijft bewaard, ook na een herstart. In de terminal: `sudo dave timers`, `sudo dave alarm`, `sudo dave alarm 7:30`, `sudo dave alarm remove 7:30`, `sudo dave alarm stop`, `sudo dave stopwatch`.

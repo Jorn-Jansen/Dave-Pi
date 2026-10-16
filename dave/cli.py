@@ -99,7 +99,15 @@ def _announcements(speak=True):
         elif round % 2 == 0:
             say(config.say(f"Time to get up. Say: hey {config.get('name')}, stop.", f"Tijd om op te staan. Zeg: hey {config.get('name')}, stop."))
 
-    timers.on_due, timers.on_ring = due, ring
+    def do(item):
+        """A command planned for later ("zet over 15 seconden de tv aan"): done now, without asking the AI again."""
+        log.by("gepland")
+        what = item.get("do") or {}
+        result = brain._run(what.get("name", ""), what.get("args") or {})
+        print(f"⏰ gepland: {item.get('text')} → {result}", flush=True)
+        log.write(f"gepland uitgevoerd: {item.get('text')} → {str(result)[:200]}")
+
+    timers.on_due, timers.on_ring, timers.on_do = due, ring, do
     appliances.on_news = say
 
 

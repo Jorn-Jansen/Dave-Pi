@@ -15,6 +15,7 @@ from . import config
 
 on_due = None    # (kind, text, item): something is due (set by the main loop)
 on_ring = None   # (item, round): the alarm is still ringing (every 30 s, until stop or snooze)
+on_do = None     # (item): a command planned for later is due ("zet over 15 seconden de tv aan"): item["do"] = {name, args}
 
 _lock = threading.RLock()
 _thread = None
@@ -70,6 +71,9 @@ def _check():
     for item in due:
         if item["kind"] == "alarm":
             _ring(item)
+        elif item["kind"] == "action":
+            if on_do:
+                threading.Thread(target=on_do, args=(item,), daemon=True).start()
         elif on_due:
             on_due(item["kind"], item.get("text", ""), item)
 
@@ -87,8 +91,8 @@ def _next(item, now):
     return at.timestamp()
 
 
-def _add(kind, at, text="", repeat="none"):
-    item = {"id": uuid.uuid4().hex[:6], "kind": kind, "at": float(at), "text": text.strip(), "repeat": repeat or "none", "made": time.time()}
+def _add(kind, at, text="", repeat="none", **extra):
+    item = {"id": uuid.uuid4().hex[:6], "kind": kind, "at": float(at), "text": text.strip(), "repeat": repeat or "none", "made": time.time(), **extra}
     with _lock:
         _save(_items() + [item])
     start()
@@ -159,6 +163,13 @@ def reminder(text, when="", minutes=None, repeat="none", part=""):
 
 # --- Alarms ---
 
+def plan(name, args, label, seconds=None, when="", part="", repeat="none"):
+    """One of Dave's commands later: in [seconds], or at [when] (like an alarm: the first coming time)."""
+    at = time.time() + float(seconds) if seconds not in (None, "") else parse_when(when, part=part)
+    item = _add("action", at, label or name, repeat, do={"name": name, "args": args})
+    return f"planned: {label or name} {_moment(at)} (in {duration(round(at - time.time()))}). It happens by itself then: don't do it now."
+
+
 def alarm(when, repeat="none", label="", part="", replace=()):
     """One or more alarms ("07:00, 07:15"). [replace]: ids of alarms to take away first (the ones the AI set a moment ago
     for the same question: when it sets them again, that's a correction, not an extra alarm). Returns (text, ids)."""
@@ -228,6 +239,8 @@ def describe(kind=""):
     for i in items:
         if i["kind"] == "timer":
             lines.append(f"timer {i['text'] or ''}: {duration(i['at'] - time.time())} left".replace("  ", " "))
+        elif i["kind"] == "action":
+            lines.append(f"planned {_moment(i['at'])} (in {duration(i['at'] - time.time())})" + (f" ({i['repeat']})" if i.get("repeat", "none") != "none" else "") + f": {i.get('text') or i['do']['name']}")
         else:
             lines.append(f"{i['kind']} {_moment(i['at'])}" + (f" ({i['repeat']})" if i.get("repeat", "none") != "none" else "") + (f": {i['text']}" if i.get("text") else ""))
     return "; ".join(lines)

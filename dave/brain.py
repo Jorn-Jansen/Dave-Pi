@@ -66,7 +66,20 @@ TOOLS = [
           "or the program: automatic (back to the schedule), manual, vacation, fireplace ('mode', value automatic).",
           {"action": {"type": "string", "enum": ["status", "set", "change", "mode"]},
            "value": _s("For set: the temperature in °C; for change: + or - degrees; for mode: automatic, manual, vacation or fireplace")}, ["action"]),
-    _tool("timer", "Timers: set one ('a timer for 10 minutes for the pizza'), list them ('how long does my timer still take?') or cancel.",
+    _tool("later", "Do one of your other commands LATER, by itself, at its time: 'zet over 15 seconden de tv aan' (command tv, args "
+          "{action: on}, seconds 15), 'doe om 23:00 de lampen uit' (command hue, when 23:00), 'elke dag om 7 uur de lampen in de keuken aan' "
+          "(repeat daily). When the user says something should happen later or at a time, use this and NOT the command itself now (and "
+          "not a timer). Also 'what's planned?' (list) and cancel.",
+          {"action": {"type": "string", "enum": ["set", "list", "cancel"]},
+           "command": _s("For set: which command to do then: hue, tv, smartthings, thermostat, volume, lists"),
+           "args": {"type": "object", "description": "For set: that command's arguments, exactly as you'd give them to it now"},
+           "seconds": {"type": "number", "description": "For set: in how many seconds (15 seconds = 15, 10 minutes = 600)"},
+           "when": _s("For set, instead of seconds: the clock time, HH:MM, like for an alarm (it picks the first coming one)"),
+           "part": {"type": "string", "enum": ["", "morning", "afternoon", "evening", "night"]},
+           "repeat": {"type": "string", "enum": ["none", "daily", "weekdays", "weekend"]},
+           "label": _s("Short, what will happen, in the user's language (e.g. 'tv woonkamer aan'); for cancel: words from it (empty = all)")},
+          ["action"]),
+    _tool("timer", "Timers (only a countdown that rings; to DO something later, use later): set one ('a timer for 10 minutes for the pizza'), list them ('how long does my timer still take?') or cancel.",
           {"action": {"type": "string", "enum": ["set", "list", "cancel"]},
            "seconds": {"type": "number", "description": "For set: how long, in seconds"},
            "label": _s("What it's for (short), or which to cancel (empty = all)")}, ["action"]),
@@ -185,6 +198,21 @@ def _run(name, args):
             if action == "mode":
                 return thermostat.set_mode(value or "automatic")
             return thermostat.status()
+        if name == "later":
+            action = args.get("action", "list")
+            if action == "cancel":
+                return timers.cancel("action", args.get("label") or "")
+            if action != "set":
+                return timers.describe("action")
+            command, what = args.get("command", ""), args.get("args") or {}
+            if isinstance(what, str):
+                try:
+                    what = json.loads(what or "{}")
+                except ValueError:
+                    what = {}
+            if command not in ("hue", "tv", "smartthings", "thermostat", "volume", "lists"):
+                return f"Can't plan '{command}' for later (only hue, tv, smartthings, thermostat, volume, lists)."
+            return timers.plan(command, what, args.get("label", ""), args.get("seconds"), args.get("when", ""), _part(args), args.get("repeat") or "none")
         if name == "timer":
             action = args.get("action")
             if action == "set":
