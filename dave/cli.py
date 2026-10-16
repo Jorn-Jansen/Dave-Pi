@@ -26,6 +26,7 @@
   sudo dave stopwatch [start|lap|pause|resume|stop|reset]
   sudo dave phone <ntfy-kanaal>        announcements (washer done, reminders) to your phone too
   sudo dave log [live | 200 | <woord>] the logbook: everything Dave did, when, and who asked for it
+  sudo dave groq [add <key> | remove <nr> | first <nr>]   the Groq keys, in order: at a limit → the next one
   sudo dave status                     what's set up, and the service
   sudo dave update                     get the newest Dave from GitHub and install it
   sudo dave config [key] [value]       see or change one setting
@@ -49,7 +50,7 @@ def main(argv=None):
     command, rest = args[0], args[1:]
     handlers = {"run": run, "ask": ask, "chat": chat, "say": say, "setup": setup, "hue": hue_command, "smartthings": smartthings_command, "thermostaat": thermostat_command, "thermostat": thermostat_command, "tv": tv_command,
                 "update": update, "voice": voice_command, "memory": memory_command, "timers": timers_command, "alarm": alarm_command,
-                "stopwatch": stopwatch_command, "phone": phone_command, "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command, "log": log_command, "stofzuiger": vacuum_command, "stofzuigers": vacuum_command, "vacuum": vacuum_command, "homeconnect": homeconnect_command, "vaatwasser": homeconnect_command, "lijst": list_command, "lijsten": list_command, "list": list_command, "lists": list_command}
+                "stopwatch": stopwatch_command, "phone": phone_command, "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command, "log": log_command, "groq": groq_command, "stofzuiger": vacuum_command, "stofzuigers": vacuum_command, "vacuum": vacuum_command, "homeconnect": homeconnect_command, "vaatwasser": homeconnect_command, "lijst": list_command, "lijsten": list_command, "list": list_command, "lists": list_command}
     if command not in handlers:
         print(f"Onbekend commando: {command}\n{__doc__}")
         return 1
@@ -358,6 +359,36 @@ def tv_command(rest):
         print(", ".join(sorted(set(tv.APPS) | set(config.get("tv_apps") or {}))))
     else:
         print(tv.control(sub, " ".join(rest[1:]), which))
+
+
+def groq_command(rest):
+    sub = rest[0].lower() if rest else ""
+    current = list(groq.keys()) if config.get("groq_key") else []
+    if sub in ("add", "toevoegen") and len(rest) > 1:
+        key = rest[1].strip()
+        if key in current:
+            print("Die sleutel staat er al in.")
+        else:
+            groq.set_keys(current + [key])
+            print(f"✅ Sleutel {len(current) + 1} toegevoegd.")
+    elif sub in ("remove", "weg", "verwijder") and len(rest) > 1 and rest[1].isdigit() and 1 <= int(rest[1]) <= len(current):
+        current.pop(int(rest[1]) - 1)
+        groq.set_keys(current)
+        print(f"Sleutel {rest[1]} verwijderd.")
+    elif sub in ("first", "eerst", "eerste") and len(rest) > 1 and rest[1].isdigit() and 1 <= int(rest[1]) <= len(current):
+        current.insert(0, current.pop(int(rest[1]) - 1))
+        groq.set_keys(current)
+        print(f"Sleutel {rest[1]} is nu de eerste.")
+    elif sub:
+        print("Gebruik: sudo dave groq | groq add <sleutel> | groq remove <nr> | groq first <nr>")
+        return 1
+    current = list(groq.keys()) if config.get("groq_key") else []
+    if not current:
+        print("Nog geen Groq-sleutel: sudo dave groq add <sleutel> (gratis op console.groq.com/keys)")
+        return
+    print("Groq-sleutels, in volgorde (zit er een aan een limiet, dan neemt Dave de volgende):")
+    for n, key in enumerate(current, 1):
+        print(f"  {n}. {config.shown('groq_key', key)}")
 
 
 def vacuum_command(rest):

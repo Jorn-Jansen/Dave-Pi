@@ -17,6 +17,7 @@ DEFAULTS = {
     "appliance_alerts": True,       # say when the washer / dryer is (almost) done
     "phone_topic": "",              # also to your phone: an ntfy channel (the free ntfy app), e.g. the one PC Dave uses                 # what Dave remembers for good ("onthoud dat…"); sudo dave memory
     "groq_key": "",                 # free at console.groq.com/keys: the AI and speech recognition
+    "groq_keys": [],                # more keys (other accounts): used in this order when the ones before are at a limit (sudo dave groq)
     # The voice: Azure (natural, online) when there's a key, otherwise Piper (offline) if installed, otherwise espeak-ng
     "voice_engine": "auto",         # auto (Azure when there's a key), azure, or offline (Piper if installed, else espeak)
     "azure_key": "",
@@ -68,7 +69,7 @@ DEFAULTS = {
 }
 
 OLD = {"alarm_lights", "alarm_room"}  # (settings Dave doesn't have anymore)
-SECRETS = {"dreame_password", "dreame_key", "homeconnect_client_secret", "homeconnect_refresh", "homeconnect_access", "lists_code", "groq_key", "azure_key", "hue_user", "smartthings_token", "smartthings_client_secret", "smartthings_refresh", "smartthings_access"}
+SECRETS = {"groq_keys", "dreame_password", "dreame_key", "homeconnect_client_secret", "homeconnect_refresh", "homeconnect_access", "lists_code", "groq_key", "azure_key", "hue_user", "smartthings_token", "smartthings_client_secret", "smartthings_refresh", "smartthings_access"}
 
 _cache = None
 _mtime = None
@@ -145,6 +146,8 @@ def say(english, dutch_text):
 
 def shown(key, value):
     """A setting for showing on screen: keys only partly."""
+    if key in SECRETS and isinstance(value, list):
+        return [shown(key, v) for v in value]
     if key in SECRETS and value:
         text = str(value)
         return text[:4] + "…" + text[-4:] if len(text) > 12 else "…"
