@@ -22,7 +22,7 @@ PERSONALITIES = {
 _history = []
 _last = 0
 _said = ""  # what the user just said (to check the part of the day the AI fills in)
-_PART_WORDS = re.compile(r"ochtend|'s morgens|morgenvroeg|middag|avond|nacht|[ap].?m|morning|afternoon|evening|night|tonight", re.I)
+_PART_WORDS = re.compile(r"ochtend|'s morgens|morgenvroeg|middag|avond|nacht|\b[ap]\.?m\b|morning|afternoon|evening|night|tonight", re.I)
 
 
 def _tool(name, description, properties=None, required=()):
@@ -106,9 +106,12 @@ TOOLS = [
 
 
 def _tools():
-    """The commands, with the TVs there are in the TV command's description (so the AI picks the right one by name)."""
-    tools = json.loads(json.dumps(TOOLS))
+    """The commands, with the TVs there are in the TV command's description (so the AI picks the right one by name). Commands for
+    things that aren't set up are left out: every command is sent along with every question, and Groq's free tier counts it."""
     tvs = tv.all_tvs()
+    unused = {name for name, ready in (("hue", config.get("hue_user")), ("tv", tvs), ("thermostat", config.get("thermostat_host")),
+                                       ("smartthings", config.get("smartthings_token") or config.get("smartthings_refresh"))) if not ready}
+    tools = [t for t in json.loads(json.dumps(TOOLS)) if t["function"]["name"] not in unused]
     if len(tvs) > 1:
         for t in tools:
             if t["function"]["name"] == "tv":

@@ -24,6 +24,14 @@ def _key():
     return key
 
 
+def _wait(text):
+    """Groq's "try again in 10m5.2s" / "in 2.5s" → seconds."""
+    m = re.search(r"try again in (?:(\d+)h)?(?:(\d+)m)?(?:([0-9.]+)s)?", text)
+    if not m or not any(m.groups()):
+        return None
+    return int(m.group(1) or 0) * 3600 + int(m.group(2) or 0) * 60 + float(m.group(3) or 0)
+
+
 def chat(messages, tools=None, search=True):
     """One chat turn; returns the assistant's message (dict, maybe with tool_calls)."""
     global _fallback_until, _search
@@ -48,14 +56,20 @@ def chat(messages, tools=None, search=True):
         if status == 400 and "tool_use_failed" in text and attempt < 3:  # a made-up or misspelled command: just ask again
             continue
         if status == 429:
-            wait = re.search(r"try again in ([0-9.]+)s", text)
-            if wait and float(wait.group(1)) < 20:
-                time.sleep(float(wait.group(1)) + 0.5)
+            wait = _wait(text)
+            daily = "per day" in text
+            if wait is not None and wait < 20 and not daily:
+                time.sleep(wait + 0.5)
                 continue
             if body["model"] == MODEL:  # the day's allowance is used up: the smaller model for a while
                 _fallback_until = time.time() + 3600
                 continue
-            raise GroqError(config.say("I've hit my usage limit. Try again in a bit.", "Ik zit aan mijn limiet. Probeer het zo nog eens."))
+            print(f"(Groq: {(data or {}).get('error', {}).get('message', text)[:300]})", flush=True)
+            minutes = max(1, round((wait or 60) / 60))
+            if daily:
+                raise GroqError(config.say(f"I've used up today's free AI allowance. In about {minutes} minutes I can do a bit again.",
+                                           f"Mijn gratis AI-tegoed voor vandaag is op. Over zo'n {minutes} minuten kan ik weer wat."))
+            raise GroqError(config.say(f"I'm asking the AI too fast. Try again in {minutes} minutes.", f"Ik vraag de AI te snel. Probeer het over {minutes} minuten nog eens."))
         if status == 401:
             raise GroqError(config.say("My Groq key doesn't work. Check it with: sudo dave setup", "Mijn Groq-sleutel werkt niet. Check hem met: sudo dave setup"))
         if attempt < 3 and status >= 500:
