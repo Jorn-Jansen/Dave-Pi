@@ -12,6 +12,9 @@ import asyncio
 import contextlib
 import os
 import pathlib
+import re
+import shutil
+import subprocess
 
 from . import config
 
@@ -92,18 +95,59 @@ async def _find(seconds):
         return found
 
 
+def _avahi():
+    """The HomeKit devices avahi (the Pi's own network finder) knows. Python's zeroconf, next to avahi on the Pi, doesn't
+    always hear a slow device; avahi does. [{id, name, model, address, port, category, paired, ff, c#, s#, pv}]."""
+    if not shutil.which("avahi-browse"):
+        return []
+    try:
+        out = subprocess.run(["avahi-browse", "-rpt", "_hap._tcp"], capture_output=True, text=True, timeout=15).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    found = {}
+    for line in out.splitlines():
+        f = line.split(";")
+        if len(f) < 10 or f[0] != "=" or f[2] != "IPv4":
+            continue
+        txt = dict(kv.split("=", 1) for kv in re.findall(r'"([^"]*)"', ";".join(f[9:])) if "=" in kv)
+        if "id" not in txt:
+            continue
+        name = re.sub(r"\\(\d{3})", lambda m: chr(int(m.group(1))), f[3])
+        found[txt["id"].lower()] = {"id": txt["id"].lower(), "name": name, "model": txt.get("md", ""), "address": f[7], "port": int(f[8]),
+                                    "category": int(txt.get("ci", 1)), "paired": not (int(txt.get("sf", 0)) & 1),
+                                    "ff": int(txt.get("ff", 0)), "sf": int(txt.get("sf", 0)), "c#": int(txt.get("c#", 0)),
+                                    "s#": int(txt.get("s#", 0)), "pv": txt.get("pv", "1.1")}
+    return list(found.values())
+
+
 def discover(seconds=6):
-    """The HomeKit devices on the network: [{id, name, model, address, category, paired}]."""
-    return _run(_find(seconds))
+    """The HomeKit devices on the network: [{id, name, model, address, category, paired}] (Python's zeroconf and avahi together)."""
+    seen = {d["id"].lower(): d for d in _avahi()}
+    try:
+        for d in _run(_find(seconds)):
+            seen.setdefault(d["id"].lower(), d)
+    except HomeKitError:
+        if not seen:
+            raise
+    return list(seen.values())
 
 
-def find_thermostat(seconds=6):
-    """The thermostat that's free to pair (HomeKit category 9 = thermostat; the ATAG's gateway says 2 = bridge, model ATAG…)."""
-    devices = discover(seconds)
-    for d in devices:
-        if not d["paired"] and (d["category"] == 9 or "ATAG" in (d["model"] or "").upper() or "THERMO" in (d["name"] or "").upper()):
-            return d
-    return None
+def _is_thermostat(d):
+    """HomeKit category 9 = thermostat; the ATAG's gateway says 2 = bridge, with model ATAG… and name Remote Gw Thermo."""
+    return d["category"] == 9 or "ATAG" in (d["model"] or "").upper() or "THERMO" in (d["name"] or "").upper()
+
+
+def find_thermostat(seconds=8):
+    """(the thermostat that's free to pair or None, the thermostats seen, all HomeKit devices seen). A slow one on Wi-Fi
+    isn't always heard right away: listens up to three times."""
+    devices = []
+    for _ in range(3):
+        devices = discover(seconds)
+        thermostats = [d for d in devices if _is_thermostat(d)]
+        free = next((d for d in thermostats if not d["paired"]), None)
+        if free or thermostats:
+            return free, thermostats, devices
+    return None, [], devices
 
 
 def from_qr(text):
@@ -126,13 +170,30 @@ def _pin(code):
     return f"{digits[:3]}-{digits[3:5]}-{digits[5:]}"
 
 
-async def _pair(device_id, pin):
+def _from_avahi(controller, device):
+    """aiohomekit's discovery for a device avahi found (when its own zeroconf didn't hear it)."""
+    from aiohomekit.controller.ip.discovery import IpDiscovery
+    from aiohomekit.model import Categories
+    from aiohomekit.model.feature_flags import FeatureFlags
+    from aiohomekit.model.status_flags import StatusFlags
+    from aiohomekit.zeroconf import HomeKitService
+    from aiohomekit.controller.abstract import TransportType
+    description = HomeKitService(name=device["name"], id=device["id"].lower(), model=device.get("model", ""),
+                                 feature_flags=FeatureFlags(device.get("ff", 0)), status_flags=StatusFlags(device.get("sf", 1)),
+                                 config_num=device.get("c#", 1), state_num=device.get("s#", 1), category=Categories(device.get("category", 2)),
+                                 protocol_version=device.get("pv", "1.1"), type="_hap._tcp.local.",
+                                 address=device["address"], addresses=[device["address"]], port=device["port"])
+    return IpDiscovery(controller.transports[TransportType.IP], description)
+
+
+async def _pair(device, pin):
+    device_id = device["id"]
     async with _controller() as controller:
         if ALIAS in controller.aliases:
             with contextlib.suppress(Exception):  # (the old one may be gone already)
                 await controller.remove_pairing(ALIAS)
         discovery = None
-        for _ in range(30):  # (a slow thermostat on Wi-Fi can take a while to be heard again: up to 30 s, not aiohomekit's 10)
+        for _ in range(8 if device.get("port") else 30):  # (a slow thermostat on Wi-Fi can take a while to be heard again)
             async for d in controller.async_discover(1):
                 if d.description.id.lower() == device_id.lower():
                     discovery = d
@@ -140,6 +201,8 @@ async def _pair(device_id, pin):
             if discovery:
                 break
             await asyncio.sleep(1)
+        if discovery is None and device.get("port"):
+            discovery = _from_avahi(controller, device)  # (avahi heard it: pair with what it knows)
         if discovery is None:
             raise HomeKitError(config.say("I can't find the thermostat on the network right now. Try again in a minute.",
                                           "Ik vind de thermostaat nu niet op het netwerk. Probeer het over een minuutje nog eens."))
@@ -161,9 +224,10 @@ def _write_file(data):
     os.replace(temp, PAIRING_FILE)
 
 
-def pair(device_id, code):
+def pair(device, code):
+    """[device]: what discover / find_thermostat found."""
     try:
-        _run(_pair(device_id, _pin(code)))
+        _run(_pair(device, _pin(code)))
     except HomeKitError as e:
         if "AuthenticationError" in str(e):
             raise HomeKitError(config.say("That HomeKit code isn't right. Check the code on the thermostat's screen and try again.",

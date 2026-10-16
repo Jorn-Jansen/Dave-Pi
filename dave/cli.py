@@ -443,16 +443,24 @@ def thermostat_command(rest):
     sub = rest[0].lower() if rest else "status"
     if sub == "setup":
         print("Zoeken naar een HomeKit-thermostaat (ATAG One Zone, de ATAG Zone-app)…")
-        found = None
+        found, thermostats, devices = None, [], []
         try:
-            found = homekit.find_thermostat()
+            found, thermostats, devices = homekit.find_thermostat()
         except homekit.HomeKitError as e:
             print(f"(HomeKit: {e})")
+        for d in thermostats:
+            print(f"  · {d['name']} ({d['model']}) op {d['address']}: " + ("al gekoppeld aan iets anders" if d["paired"] else "vrij om te koppelen"))
+        if not thermostats and devices:
+            print("  HomeKit-apparaten gezien, maar geen thermostaat: " + ", ".join(f"{d['name']}" for d in devices))
+        if not found and any(d["paired"] for d in thermostats):
+            print("De thermostaat is al aan iets anders gekoppeld (bv. de Woning-app op een iPhone, na het scannen van de QR-code).")
+            print("Haal hem daar weg (Woning-app → de thermostaat → instellingen → Verwijder accessoire) en probeer het opnieuw.")
+            return 1
         if found:
             print(f"Gevonden: {found['name']} ({found['model']}) op {found['address']}.")
             print("De HomeKit-code staat op het scherm van de thermostaat (menu: verbinding / HomeKit), niet op een sticker.")
             code = input("HomeKit-code (8 cijfers, bv. 123-45-678, of de tekst X-HM://… uit een QR-scanner-app): ").strip()
-            homekit.pair(found["id"], code)
+            homekit.pair(found, code)
             print("✅ Gekoppeld via HomeKit.")
             print(thermostat.status())
             return
