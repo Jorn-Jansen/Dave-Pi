@@ -27,6 +27,8 @@ DEFAULTS = {
     "tv_host": "",
     "tv_mac": "",
     "tv_name": "",
+    "tvs": {},                      # {"woonkamer": {"host": …, "mac": …, "model": …}}
+    "tv_default": "",               # the one used when you don't say which
     "tv_apps": {},                  # your own apps: {"Ziggo GO": "com.ziggo.tv"} (sudo dave tv add-app)
     # SmartThings (sudo dave smartthings token … or sudo dave smartthings login)
     "smartthings_token": "",

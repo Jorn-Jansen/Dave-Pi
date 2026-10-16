@@ -53,7 +53,8 @@ TOOLS = [
           "what's on ('status'), open an app ('put Netflix on the TV': action app, value Netflix), or press a key (home, back, play_pause, ok, up…).",
           {"action": {"type": "string", "enum": ["on", "off", "status", "app", "volume_up", "volume_down", "mute", "home", "back", "play_pause",
                                                  "play", "pause", "next", "previous", "up", "down", "left", "right", "ok", "channel_up", "channel_down", "input", "settings"]},
-           "value": _s("For app: the app's name (Netflix, YouTube, Disney+, Videoland…); for volume: how many steps")}, ["action"]),
+           "value": _s("For app: the app's name (Netflix, YouTube, Disney+, Videoland…); for volume: how many steps"),
+           "tv": _s("Which TV, by its name (see the list); empty = the default one. Only fill it in when the user said which.")}, ["action"]),
     _tool("timer", "Timers: set one ('a timer for 10 minutes for the pizza'), list them ('how long does my timer still take?') or cancel.",
           {"action": {"type": "string", "enum": ["set", "list", "cancel"]},
            "seconds": {"type": "number", "description": "For set: how long, in seconds"},
@@ -63,6 +64,17 @@ TOOLS = [
     _tool("set_personality", "Change how you talk: normal, chill, hyped, butler or sarcastic ('be a butler', 'act normal').",
           {"personality": {"type": "string", "enum": list(PERSONALITIES)}}, ["personality"]),
 ]
+
+
+def _tools():
+    """The commands, with the TVs there are in the TV command's description (so the AI picks the right one by name)."""
+    tools = json.loads(json.dumps(TOOLS))
+    tvs = tv.all_tvs()
+    if len(tvs) > 1:
+        for t in tools:
+            if t["function"]["name"] == "tv":
+                t["function"]["description"] += f" The TVs: {', '.join(tvs)} (default: {tv.default()})."
+    return tools
 
 
 def _system():
@@ -94,7 +106,7 @@ def _run(name, args):
             arguments = [int(a) if isinstance(a, str) and a.lstrip("-").isdigit() else a for a in (args.get("arguments") or [])]  # (numbers as numbers)
             return smartthings.command(device, args.get("capability", "switch"), args.get("command", ""), arguments)
         if name == "tv":
-            return tv.control(args.get("action", "status"), str(args.get("value") or ""))
+            return tv.control(args.get("action", "status"), str(args.get("value") or ""), args.get("tv") or "")
         if name == "timer":
             action = args.get("action")
             if action == "set":
@@ -142,7 +154,7 @@ def ask(text, on_action=None):
     _last = time.time()
     messages = [{"role": "system", "content": _system()}] + _history + [{"role": "user", "content": text}]
     for _ in range(5):  # commands, then the answer about them
-        message = groq.chat(messages, TOOLS)
+        message = groq.chat(messages, _tools())
         calls = message.get("tool_calls") or []
         if not calls:
             answer = re.sub(r"\[\s*[a-zA-Z][a-zA-Z -]{1,20}?\s*\]\s*", "", (message.get("content") or "").strip())

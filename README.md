@@ -49,6 +49,8 @@ Daarna: *"is de wasmachine klaar?"*, *"hoe lang duurt de droger nog?"*, *"zet de
 
 **De tv (Google TV / Android TV, zoals Philips The One):** `sudo dave tv setup` — typ het IP-adres van de tv en de code die op
 de tv verschijnt. Zet op de tv ook *inschakelen via netwerk* aan. Daarna: *"hey Dave, zet de tv aan"*, *"tv harder"*, *"zet Netflix op de tv"*.
+Meerdere tv's (ook een Chromecast met Google TV): geef ze elk een naam bij `sudo dave tv setup` (*"zet Netflix op de slaapkamer-tv"*), en kies
+met `sudo dave tv default <naam>` welke hij pakt als je geen naam noemt. `sudo dave tv list` laat ze zien (⭐ = standaard).
 
 ## Altijd aan
 

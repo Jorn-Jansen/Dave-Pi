@@ -9,7 +9,8 @@
   sudo dave smartthings token <token>  connect SmartThings with a personal token (valid 24 hours)
   sudo dave smartthings login          connect SmartThings for good (OAuth)
   sudo dave smartthings list | status <device>
-  sudo dave tv setup | on | off | status   the TV (Google TV / Android TV), paired once with a code on the TV
+  sudo dave tv setup [naam] | list | default <naam> | remove <naam>   TVs (Google TV / Android TV), each paired once
+  sudo dave tv on|off|status [naam]    and  sudo dave tv app netflix --tv slaapkamer
   sudo dave tv app netflix | apps | add-app "Ziggo GO" com.ziggo.tv
   sudo dave test-speaker | test-mic    check the sound
   sudo dave status                     what's set up, and the service
@@ -235,17 +236,38 @@ def smartthings_command(rest):
 
 
 def tv_command(rest):
-    sub = rest[0] if rest else "status"
+    # Which TV: "--tv slaapkamer" anywhere (else the default one)
+    which = ""
+    if "--tv" in rest:
+        i = rest.index("--tv")
+        which = " ".join(rest[i + 1:i + 2])
+        rest = rest[:i] + rest[i + 2:]
+    sub = rest[0] if rest else "list"
     if sub == "setup":
         print("Zet de tv aan. Het IP-adres staat op de tv bij Instellingen → Netwerk en internet → (je wifi) of in je router.")
+        print("Let op: bij een kastje eronder (KPN, Ziggo) het adres van de tv of Chromecast zelf, niet dat van het kastje.")
         print("Tip: zet op de tv ook 'Inschakelen via wifi/netwerk' (of 'Snel starten') aan, zodat Dave hem uit standby kan halen.")
-        host = input(f"IP-adres van de tv [{config.get('tv_host') or 'bv. 192.168.68.60'}]: ").strip() or config.get("tv_host")
+        name = (" ".join(rest[1:]) or input("Hoe heet deze tv? (bv. woonkamer, slaapkamer): ")).strip().lower() or "tv"
+        known = tv.all_tvs().get(name, {})
+        host = input(f"IP-adres van de tv [{known.get('host') or 'bv. 192.168.68.60'}]: ").strip() or known.get("host")
         if not host:
             return 1
-        name = tv.setup(host, lambda: input("Er staat nu een code op de tv. Typ hem hier: "))
-        print(f"✅ Gekoppeld met {name}. Probeer: sudo dave tv off   en   sudo dave tv on")
+        model = tv.setup(name, host, lambda: input("Er staat nu een code op het scherm. Typ hem hier: "))
+        print(f"✅ {name} gekoppeld ({model}).")
+        print(tv.describe())
+        print(f"Probeer: sudo dave tv off {name}   ·   standaard-tv kiezen: sudo dave tv default <naam>")
+    elif sub == "list":
+        print(tv.describe())
+    elif sub == "default":
+        if len(rest) < 2:
+            print(f"Standaard-tv: {tv.default() or '(geen)'}. Veranderen: sudo dave tv default <naam>")
+        else:
+            print(f"⭐ {tv.set_default(' '.join(rest[1:]))} is nu de standaard-tv.")
+    elif sub == "remove":
+        print(f"{tv.remove(' '.join(rest[1:]))} is verwijderd.")
+        print(tv.describe())
     elif sub in ("on", "off", "status"):
-        print(tv.control(sub))
+        print(tv.control(sub, "", which or " ".join(rest[1:])))
     elif sub == "add-app":
         if len(rest) < 3:
             print('Gebruik: sudo dave tv add-app "Ziggo GO" com.ziggo.tv')
@@ -258,7 +280,7 @@ def tv_command(rest):
     elif sub == "apps":
         print(", ".join(sorted(set(tv.APPS) | set(config.get("tv_apps") or {}))))
     else:
-        print(tv.control(sub, " ".join(rest[1:])))
+        print(tv.control(sub, " ".join(rest[1:]), which))
 
 
 def config_command(rest):
@@ -333,7 +355,8 @@ def status(_):
     print(f"Hue: {'✅ ' + config.get('hue_bridge') if config.get('hue_user') else '❌ (sudo dave hue setup)'}")
     st = "OAuth" if config.get("smartthings_refresh") else "token" if config.get("smartthings_token") else ""
     print(f"SmartThings: {'✅ ' + st if st else '❌ (sudo dave smartthings token …)'}")
-    print(f"TV: {'✅ ' + (config.get('tv_name') or config.get('tv_host')) if config.get('tv_host') else '❌ (sudo dave tv setup)'}")
+    tvs = tv.all_tvs()
+    print(f"TV's: " + (", ".join(f"{'⭐' if n == tv.default() else ''}{n} ({i.get('model') or i.get('host')})" for n, i in tvs.items()) if tvs else "❌ (sudo dave tv setup)"))
     print(f"Wekwoord: \"{config.get('wake_phrase')}\" · model {'✅' if os.path.isdir(listen.MODEL) else '❌ ' + listen.MODEL}")
     result = subprocess.run(["systemctl", "is-active", "dave"], capture_output=True, text=True)
     print(f"Service: {result.stdout.strip() or 'onbekend'}  (logs: journalctl -u dave -f)")
