@@ -68,8 +68,21 @@ def _login():
         return cloud
 
 
+REGIONS = {"eu", "us", "cn", "ru", "sg", "in", "kr"}
+EUROPE = {"nl", "be", "de", "fr", "uk", "gb", "es", "it", "at", "ch", "pl", "se", "dk", "no", "fi", "pt", "ie", "lu", "cz", "gr", "europe", "europa"}
+
+
+def region(text):
+    """Dreame's server region: 'eu' for Europe (also when a country like 'nl' is given), None when unknown."""
+    text = (text or "eu").strip().lower()
+    return "eu" if text in EUROPE else text if text in REGIONS else None
+
+
 def login(user, password, country="eu"):
     global _cloud
+    country = region(country)
+    if not country:
+        raise VacuumError(config.say("Unknown region: use eu (Europe), us, cn, ru or sg.", "Onbekende regio: gebruik eu (Europa), us, cn, ru of sg."))
     before = {k: config.get(k) for k in ("dreame_user", "dreame_password", "dreame_country", "dreame_key")}
     config.set("dreame_user", user.strip())
     config.set("dreame_password", password)

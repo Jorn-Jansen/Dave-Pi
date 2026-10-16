@@ -367,7 +367,7 @@ def vacuum_command(rest):
         print("Inloggen met het account van de Dreamehome-app (het wachtwoord blijft alleen op deze Pi).")
         user = input("E-mailadres (of telefoonnummer): ").strip()
         password = getpass.getpass("Wachtwoord: ")
-        country = input("Regio [eu] (eu, us, cn, ru, sg): ").strip().lower() or "eu"
+        country = input("Regio van de server [eu] (Nederland en België: eu, dus gewoon Enter): ").strip().lower() or "eu"
         found = vacuum.login(user, password, country)
         print(f"✅ Ingelogd. Stofzuigers: {', '.join(v['name'] + ('' if v['online'] else ' (offline)') for v in found) or '(geen)'}")
         if _service_running():
