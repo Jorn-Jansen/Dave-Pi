@@ -182,6 +182,21 @@ def _part(args):
     return part if part and _PART_WORDS.search(_said) else ""
 
 
+def _which_tv(args):
+    """The TV the user named, only when its name is really in what they said (the AI sometimes fills in one, like the user's own
+    name's TV); otherwise "" = the default TV. A planned command keeps the TV it was planned with."""
+    which = args.get("tv") or ""
+    if not which or args.get("_planned"):
+        return which
+    try:
+        name, _ = tv.pick(which)
+    except tv.TVError:
+        return which  # (let tv.control say there's no TV by that name)
+    said = re.sub(r"[^a-z0-9]", "", _said.lower())
+    words = [w for w in re.split(r"[^a-z0-9]+", name.lower()) if w and w not in ("tv", "televisie")]
+    return name if words and all(w in said for w in words) else ""
+
+
 def _run(name, args):
     """Carries out a command; returns what happened (for the AI to tell the user)."""
     try:
@@ -199,7 +214,7 @@ def _run(name, args):
             arguments = [int(a) if isinstance(a, str) and a.lstrip("-").isdigit() else a for a in (args.get("arguments") or [])]  # (numbers as numbers)
             return smartthings.command(device, args.get("capability", "switch"), args.get("command", ""), arguments)
         if name == "tv":
-            return tv.control(args.get("action", "status"), str(args.get("value") or ""), args.get("tv") or "", bool(args.get("play")))
+            return tv.control(args.get("action", "status"), str(args.get("value") or ""), _which_tv(args), bool(args.get("play")))
         if name == "thermostat":
             action, value = args.get("action", "status"), str(args.get("value") or "").replace(",", ".").replace("°", "").strip()
             if action == "set":
@@ -223,6 +238,8 @@ def _run(name, args):
                     what = {}
             if command not in ("hue", "tv", "smartthings", "thermostat", "volume", "lists"):
                 return f"Can't plan '{command}' for later (only hue, tv, smartthings, thermostat, volume, lists)."
+            if command == "tv":
+                what = dict(what, tv=_which_tv(what) or tv.default(), _planned=True)  # (which TV: decided now, from what was said now)
             return timers.plan(command, what, args.get("label", ""), args.get("seconds"), args.get("when", ""), _part(args), args.get("repeat") or "none")
         if name == "timer":
             action = args.get("action")
