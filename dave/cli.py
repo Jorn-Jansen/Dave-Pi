@@ -408,7 +408,7 @@ def alarm_command(rest):
     elif sub in ("remove", "cancel", "delete", "verwijder", "weg", "uit"):
         print(timers.cancel("alarm", " ".join(rest[1:])))
     elif sub and sub[0].isdigit():
-        print(timers.alarm(sub, label=" ".join(rest[1:])))
+        print(timers.alarm(sub, label=" ".join(rest[1:]))[0])
     else:
         print(timers.describe("alarm"))
 

@@ -21,6 +21,7 @@ PERSONALITIES = {
 
 _history = []
 _last = 0
+_alarms_now = []  # the alarms set for the question being answered now (setting them again replaces them)
 _said = ""  # what the user just said (to check the part of the day the AI fills in)
 _PART_WORDS = re.compile(r"ochtend|'s morgens|morgenvroeg|middag|avond|nacht|\b[ap]\.?m\b|morning|afternoon|evening|night|tonight", re.I)
 
@@ -82,9 +83,9 @@ TOOLS = [
           "list, cancel, and while it's going off: 'stop' (stop) or 'snooze' / 'nog 10 minuten' (snooze).",
           {"action": {"type": "string", "enum": ["set", "list", "cancel", "stop", "snooze"]},
            "when": _s("For set: the time as the user said it, HH:MM ('5 over 2' → 02:05, 'half 9' → 08:30, 'kwart voor 3' → 02:45, "
-                      "'5 over half 3' → 02:35: it then picks the first coming 2:05, at night or in the "
+                      "'5 over half 3' → 02:35, 'tien over half 3' → 02:40 (never 03:40): it then picks the first coming 2:05, at night or in the "
                       "afternoon, so don't add 12 yourself and don't add a date for today or tomorrow); YYYY-MM-DD HH:MM only for a later day; "
-                      "24-hour (14:05) only when the user said it so"),
+                      "24-hour (14:05) only when the user said it so. Several alarms: all their times in one call, comma-separated ('07:00, 07:15')"),
            "part": {"type": "string", "enum": ["", "morning", "afternoon", "evening", "night"], "description": "Only when the user said it ('s ochtends, 's middags, 's avonds, 's nachts, am/pm); otherwise empty"},
            "repeat": {"type": "string", "enum": ["none", "daily", "weekdays", "weekend"]},
            "label": _s("For set: what it's for (optional); for cancel: words from it or its time (empty = all)"),
@@ -191,7 +192,9 @@ def _run(name, args):
         if name == "alarm":
             action = args.get("action")
             if action == "set":
-                return timers.alarm(args.get("when", ""), args.get("repeat") or "none", args.get("label", ""), _part(args))
+                text, ids = timers.alarm(args.get("when", ""), args.get("repeat") or "none", args.get("label", ""), _part(args), _alarms_now)
+                _alarms_now[:] = ids
+                return text
             if action == "stop":
                 return timers.stop_alarm()
             if action == "snooze":
@@ -267,6 +270,7 @@ def ask(text, on_action=None):
     """Answers [text]: does what's asked (commands) and returns what to say. [on_action]: called with each command it runs."""
     global _history, _last, _said
     _said = text
+    _alarms_now.clear()
     if time.time() - _last > 600:  # follow-up questions work for 10 minutes
         _history = []
     _last = time.time()

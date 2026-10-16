@@ -169,12 +169,23 @@ def reminder(text, when="", minutes=None, repeat="none", part=""):
 
 # --- Alarms ---
 
-def alarm(when, repeat="none", label="", part=""):
-    at = parse_when(when, part=part)
-    if _same("alarm", at):
-        return f"(already set) alarm at {_moment(at)}. Done: don't set it again."
-    item = _add("alarm", at, label, repeat)
-    return f"alarm set at {_moment(item['at'])}" + (f", {repeat}" if repeat != "none" else "") + (f" ({label})" if label else "")
+def alarm(when, repeat="none", label="", part="", replace=()):
+    """One or more alarms ("07:00, 07:15"). [replace]: ids of alarms to take away first (the ones the AI set a moment ago
+    for the same question: when it sets them again, that's a correction, not an extra alarm). Returns (text, ids)."""
+    if replace:
+        with _lock:
+            _save([i for i in _items() if i["id"] not in replace])
+    said, ids = [], []
+    for one in [w.strip() for w in str(when).split(",") if w.strip()] or [""]:
+        at = parse_when(one, part=part)
+        if _same("alarm", at):
+            said.append(f"(already set) alarm {_moment(at)}")
+            continue
+        item = _add("alarm", at, label, repeat)
+        ids.append(item["id"])
+        said.append(f"alarm set: {_moment(at)}, in {duration(round((at - time.time()) / 60) * 60)}" + (f", {repeat}" if repeat != "none" else "")
+                    + (f" ({label})" if label else ""))
+    return "; ".join(said) + ". Done: tell the user this time.", ids
 
 
 def _ring(item):
