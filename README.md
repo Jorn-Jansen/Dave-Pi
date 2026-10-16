@@ -67,6 +67,14 @@ In de terminal: `sudo dave thermostaat`, `sudo dave thermostaat 20.5`, `sudo dav
 
 Alles blijft bewaard, ook na een herstart. In de terminal: `sudo dave timers`, `sudo dave alarm`, `sudo dave alarm 7:30`, `sudo dave alarm remove 7:30`, `sudo dave alarm stop`, `sudo dave stopwatch`.
 
+## Lijsten (gedeeld met Dave op je iPhone)
+
+*"Maak een boodschappenlijst"*, *"zet melk en eieren op de boodschappenlijst"*, *"wat staat er op de lijst?"*, *"vink de melk af"*.
+De lijsten van het huis staan ook in het tabblad **Lijsten** van Dave op je iPhone, ook buiten je wifi: ze gaan versleuteld via ntfy.sh,
+over een kanaal dat bij de huiscode hoort. Koppelen: `sudo dave lijst koppel` (code of QR-code), en in de app: Lijsten → 🏠.
+In de terminal: `sudo dave lijst`, `sudo dave lijst maak Klusjes`, `sudo dave lijst boodschappen + melk, kaas`, `sudo dave lijst boodschappen - kaas`.
+Code uitgelekt? `sudo dave lijst koppel nieuw`.
+
 ## Wasmachine en droger
 
 Dave zegt vanzelf als de wasmachine of droger **bijna klaar** is (nog 5 minuten) en als hij **klaar** is. Ook op je telefoon:
