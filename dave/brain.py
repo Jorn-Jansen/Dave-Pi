@@ -166,8 +166,18 @@ def _memories():
             "code' from this list (don't save it again):\n" + "\n".join(f"- {m}" for m in memories))
 
 
+_SAID_PARTS = [("night", r"'?s nachts|vannacht|\bnacht\b|at night|tonight at [0-4]\b"),
+               ("morning", r"ochtend|'?s morgens|morgenvroeg|\bam\b|a\.m\.|morning"),
+               ("afternoon", r"middag|afternoon"),
+               ("evening", r"avond|\bpm\b|p\.m\.|evening|tonight")]
+
+
 def _part(args):
-    """The part of the day, only when the user really said one (the AI sometimes makes one up)."""
+    """The part of the day: what the user said ("om 8 uur 's ochtends" → morning, also when the AI forgets to pass it on),
+    otherwise only the AI's when the user said one at all (it sometimes makes one up)."""
+    for part, words in _SAID_PARTS:
+        if re.search(words, _said, re.I):
+            return part
     part = args.get("part") or ""
     return part if part and _PART_WORDS.search(_said) else ""
 
