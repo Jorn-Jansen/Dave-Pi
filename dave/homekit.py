@@ -106,8 +106,21 @@ def find_thermostat(seconds=6):
     return None
 
 
+def from_qr(text):
+    """The 8 digits from a HomeKit QR code's text ("X-HM://0023ISYWYABCD": the setup code is the lowest 27 bits of the
+    first 9 characters, in base 36). None when it isn't one."""
+    text = str(text).strip().upper()
+    if not text.startswith("X-HM://") or len(text) < 16:
+        return None
+    try:
+        payload = int(text[7:16], 36)
+    except ValueError:
+        return None
+    return f"{payload & 0x7FFFFFF:08d}"
+
+
 def _pin(code):
-    digits = "".join(c for c in str(code) if c.isdigit())
+    digits = from_qr(code) or "".join(c for c in str(code) if c.isdigit())
     if len(digits) != 8:
         raise HomeKitError(config.say("The HomeKit code has 8 digits (123-45-678).", "De HomeKit-code heeft 8 cijfers (123-45-678)."))
     return f"{digits[:3]}-{digits[3:5]}-{digits[5:]}"

@@ -450,7 +450,8 @@ def thermostat_command(rest):
             print(f"(HomeKit: {e})")
         if found:
             print(f"Gevonden: {found['name']} ({found['model']}) op {found['address']}.")
-            code = input("HomeKit-code (8 cijfers, op de sticker of in het menu van de thermostaat, bv. 123-45-678): ").strip()
+            print("De HomeKit-code staat op het scherm van de thermostaat (menu: verbinding / HomeKit), niet op een sticker.")
+            code = input("HomeKit-code (8 cijfers, bv. 123-45-678, of de tekst X-HM://… uit een QR-scanner-app): ").strip()
             homekit.pair(found["id"], code)
             print("✅ Gekoppeld via HomeKit.")
             print(thermostat.status())

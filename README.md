@@ -55,7 +55,7 @@ met `sudo dave tv default <naam>` welke hij pakt als je geen naam noemt. `sudo d
 ## De verwarming (ATAG-thermostaat)
 
 `sudo dave thermostaat setup` — Dave zoekt de thermostaat op je netwerk.
-- **ATAG One Zone** (de ATAG Zone-app): via HomeKit, zonder cloud. Typ de HomeKit-code van 8 cijfers (sticker of menu van de thermostaat).
+- **ATAG One Zone** (de ATAG Zone-app): via HomeKit, zonder cloud. Typ de HomeKit-code van 8 cijfers: die laat de thermostaat zelf op zijn scherm zien (met een QR-code), niet op een sticker. Alleen een QR-code? Scan hem met een QR-scanner-app (niet de iPhone-camera) en plak de tekst `X-HM://…`.
   Staat hij al in de Woning-app van een iPhone, haal hem daar dan eerst weg: een HomeKit-apparaat heeft één eigenaar.
   Weer loslaten: `sudo dave thermostaat ontkoppel`.
 - **Oudere ATAG One**: via zijn eigen koppeling; bevestig daarna het verzoek op het scherm van de thermostaat.
