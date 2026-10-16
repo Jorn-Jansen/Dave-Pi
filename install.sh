@@ -21,6 +21,23 @@ if [ ! -d /opt/dave/venv ]; then python3 -m venv /opt/dave/venv; fi
 /opt/dave/venv/bin/pip install -q --upgrade pip
 /opt/dave/venv/bin/pip install -q vosk androidtvremote2 cryptography aiohomekit
 
+echo "== Dreame (robot vacuums): the cloud part of github.com/Tasshack/dreame-vacuum (MIT), latest release =="
+/opt/dave/venv/bin/pip install -q paho-mqtt pycryptodome requests || true
+V=/opt/dave/vendor/dreame_vacuum/dreame
+mkdir -p "$V" /opt/dave/vendor/miio
+TAG=$(curl -fsSL https://api.github.com/repos/Tasshack/dreame-vacuum/releases/latest 2>/dev/null | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+for f in protocol.py types.py exceptions.py; do
+  curl -fsSL -o "$V/$f.new" "https://raw.githubusercontent.com/Tasshack/dreame-vacuum/${TAG:-master}/custom_components/dreame_vacuum/dreame/$f" && mv "$V/$f.new" "$V/$f" || echo "(couldn't get $f)"
+done
+: > /opt/dave/vendor/dreame_vacuum/__init__.py
+: > "$V/__init__.py"
+if ! /opt/dave/venv/bin/python -c "import miio" 2>/dev/null || [ -f /opt/dave/vendor/miio/stub ]; then
+  # (python-miio is only for controlling a vacuum without the cloud, which Dave doesn't do: an empty stand-in, not the heavy package)
+  : > /opt/dave/vendor/miio/stub
+  : > /opt/dave/vendor/miio/__init__.py
+  printf 'class MiIOProtocol:\n    def __init__(self, *args, **kwargs):\n        pass\n' > /opt/dave/vendor/miio/miioprotocol.py
+fi
+
 echo "== Wake word model (offline, ~40 MB) =="
 MODEL=vosk-model-small-en-us-0.15
 if [ ! -d "/opt/dave/models/$MODEL" ]; then

@@ -81,6 +81,14 @@ over een kanaal dat bij de huiscode hoort. Koppelen: `sudo dave lijst koppel` (c
 In de terminal: `sudo dave lijst`, `sudo dave lijst maak Klusjes`, `sudo dave lijst boodschappen + melk, kaas`, `sudo dave lijst boodschappen - kaas`.
 Code uitgelekt? `sudo dave lijst koppel nieuw`.
 
+## De robotstofzuigers (Dreame, de Dreamehome-app)
+
+`sudo dave stofzuiger login` — eenmalig inloggen met het Dreamehome-account. Daarna: *"ga stofzuigen"*, *"pauzeer de stofzuiger"*,
+*"stuur de stofzuiger terug"*, *"waar is de stofzuiger?"* (hij maakt geluid), *"hoe vol is de batterij van de stofzuiger?"*; en Dave zegt
+het als hij klaar is of vastzit. Dreame heeft geen openbare koppeling: Dave gebruikt het cloud-deel van de Dreame-integratie voor
+Home Assistant ([Tasshack/dreame-vacuum](https://github.com/Tasshack/dreame-vacuum), MIT), dat `sudo dave update` ophaalt.
+In de terminal: `sudo dave stofzuiger`, `sudo dave stofzuiger start`, `sudo dave stofzuiger terug`.
+
 ## De vaatwasser (Home Connect: Bosch, Siemens…)
 
 `sudo dave homeconnect setup` — eenmalig: een gratis app op developer.home-connect.com (OAuth Flow: Device Flow, met het e-mailadres van je

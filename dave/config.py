@@ -54,6 +54,11 @@ DEFAULTS = {
     "smartthings_refresh": "",
     "smartthings_access": "",
     "smartthings_expires": 0,
+    # The Dreame robot vacuums (the Dreamehome account): sudo dave stofzuiger login
+    "dreame_user": "",
+    "dreame_password": "",
+    "dreame_key": "",
+    "dreame_country": "eu",
     # Home Connect (Bosch, Siemens…: the dishwasher): sudo dave homeconnect setup
     "homeconnect_client_id": "",
     "homeconnect_client_secret": "",
@@ -63,7 +68,7 @@ DEFAULTS = {
 }
 
 OLD = {"alarm_lights", "alarm_room"}  # (settings Dave doesn't have anymore)
-SECRETS = {"homeconnect_client_secret", "homeconnect_refresh", "homeconnect_access", "lists_code", "groq_key", "azure_key", "hue_user", "smartthings_token", "smartthings_client_secret", "smartthings_refresh", "smartthings_access"}
+SECRETS = {"dreame_password", "dreame_key", "homeconnect_client_secret", "homeconnect_refresh", "homeconnect_access", "lists_code", "groq_key", "azure_key", "hue_user", "smartthings_token", "smartthings_client_secret", "smartthings_refresh", "smartthings_access"}
 
 _cache = None
 _mtime = None

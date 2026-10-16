@@ -9,7 +9,7 @@ import re
 import subprocess
 import time
 
-from . import config, groq, homeconnect, hue, lists, log, smartthings, stopwatch, thermostat, timers, tv
+from . import config, groq, homeconnect, hue, lists, log, vacuum, smartthings, stopwatch, thermostat, timers, tv
 
 PERSONALITIES = {
     "normal": "",
@@ -116,6 +116,10 @@ TOOLS = [
           {"fact": _s("The note, short, in the user's language (e.g. 'Houdt van warm wit licht', 'Code fietsenstalling: 4821')")}, ["fact"]),
     _tool("forget", "Forget something you remembered ('vergeet dat van de fietsenstalling', 'forget my birthday'); 'everything' forgets all.",
           {"fact": _s("Words from what to forget, or 'everything'")}, ["fact"]),
+    _tool("vacuum", "The Dreame robot vacuums: start cleaning ('zet de stofzuiger aan', 'ga stofzuigen': start), pause, stop, back to the dock "
+          "('stuur de stofzuiger terug': dock), 'where is the vacuum?' (locate: it makes a sound), and how it's doing / its battery (status).",
+          {"action": {"type": "string", "enum": ["status", "start", "pause", "stop", "dock", "locate"]},
+           "vacuum": _s("Which one, by name, or 'allebei' for both; empty when the user didn't say")}, ["action"]),
     _tool("homeconnect", "Home Connect appliances (Bosch / Siemens: the dishwasher, …): how far it is and how long it still takes "
           "('hoe lang moet de vaatwasser nog?', 'is de vaatwasser klaar?': status), or start it ('start de vaatwasser', 'zet de vaatwasser "
           "op eco': start, program eco) — starting only works when remote start is on at the appliance.",
@@ -139,7 +143,7 @@ def _tools():
     """The commands, with the TVs there are in the TV command's description (so the AI picks the right one by name). Commands for
     things that aren't set up are left out: every command is sent along with every question, and Groq's free tier counts it."""
     tvs = tv.all_tvs()
-    unused = {name for name, ready in (("hue", config.get("hue_user")), ("tv", tvs), ("thermostat", config.get("thermostat_host") or config.get("thermostat_kind")), ("homeconnect", config.get("homeconnect_refresh")),
+    unused = {name for name, ready in (("hue", config.get("hue_user")), ("tv", tvs), ("thermostat", config.get("thermostat_host") or config.get("thermostat_kind")), ("homeconnect", config.get("homeconnect_refresh")), ("vacuum", vacuum.ready()),
                                        ("smartthings", config.get("smartthings_token") or config.get("smartthings_refresh"))) if not ready}
     tools = [t for t in json.loads(json.dumps(TOOLS)) if t["function"]["name"] not in unused]
     for t in tools:
@@ -158,7 +162,7 @@ def _system():
     personality = PERSONALITIES.get(config.get("personality"), "")
     return (f"{personality}\n\nYou are {name}, a voice assistant on a smart speaker in the user's home (a Raspberry Pi), like a Google Home. Made by Jorn Jansen. License (only if asked): PolyForm Strict 1.0.0, so it may be downloaded and used for personal, non-commercial use, but not changed, copied, redistributed or sold. It is NOT open source and NOT MIT. "
             f"Always answer in {language} (also short confirmations), unless the user speaks another language. Your answers are spoken: one or two short sentences, plain speech, "
-            "no lists, no markdown, no emoji, no links. Use your commands for the lights (Hue), the heating (thermostat), the dishwasher (Home Connect), the lists (shopping list…), the TV, Samsung devices (SmartThings), timers, reminders, "
+            "no lists, no markdown, no emoji, no links. Use your commands for the lights (Hue), the heating (thermostat), the dishwasher (Home Connect), the robot vacuums, the lists (shopping list…), the TV, Samsung devices (SmartThings), timers, reminders, "
             "alarms, the stopwatch and the volume; when the user asks for several things at once, do all of them. Look things up on the web for news, weather and facts. "
             f"It's {time.strftime('%A %d %B %Y, %H:%M')} now. Only end with a question when you really need an answer (then the speaker keeps " +
             "listening); never add filler questions like 'Anything else?' or 'Is er verder nog iets?', just stop after the answer."
@@ -279,6 +283,10 @@ def _run(name, args):
             if action == "cancel":
                 return timers.cancel("alarm", args.get("label") or args.get("when") or "")  # (the AI sometimes gives the time as when)
             return timers.describe("alarm")
+        if name == "vacuum":
+            action, which = args.get("action", "status"), args.get("vacuum") or ""
+            return {"start": vacuum.start, "pause": vacuum.pause, "stop": vacuum.stop, "dock": vacuum.dock,
+                    "locate": vacuum.locate}.get(action, vacuum.status)(which)
         if name == "homeconnect":
             if args.get("action") in ("power_on", "power_off"):
                 return homeconnect.power(args.get("appliance") or "", args.get("action") == "power_on")
@@ -312,7 +320,7 @@ def _run(name, args):
         if name == "set_personality":
             config.set("personality", args.get("personality", "normal"))
             return f"personality is now {config.get('personality')}"
-    except (hue.HueError, smartthings.SmartThingsError, tv.TVError, thermostat.ThermostatError, lists.ListError, homeconnect.HomeConnectError) as e:
+    except (hue.HueError, smartthings.SmartThingsError, tv.TVError, thermostat.ThermostatError, lists.ListError, homeconnect.HomeConnectError, vacuum.VacuumError) as e:
         return f"Failed: {e}"
     except Exception as e:
         return f"Failed ({type(e).__name__}): {e}"
