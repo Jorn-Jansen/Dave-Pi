@@ -225,22 +225,42 @@ def start(which="", program=""):
     if s.get("RemoteControlStartAllowed") is False:
         raise HomeConnectError(config.say(f"Remote start is off on the {name}: switch it on at the appliance (often a button with a Wi-Fi or remote sign) and try again.",
                                           f"Op afstand starten staat uit op de {name}: zet het aan op het apparaat zelf (vaak een knop met een wifi- of afstandsteken) en probeer het opnieuw."))
-    key = None
+    available = None
+    def programs():
+        nonlocal available
+        if available is None:
+            available = ((_call("GET", f"/api/homeappliances/{a['haId']}/programs/available") or {}).get("data") or {}).get("programs") or []
+        return available
+
+    def label(key):
+        return next((p.get("name") for p in programs() if p["key"] == key and p.get("name")), key.split(".")[-1])
+
     if program:
-        available = ((_call("GET", f"/api/homeappliances/{a['haId']}/programs/available") or {}).get("data") or {}).get("programs") or []
         want = program.lower().replace(" ", "")
-        key = next((p["key"] for p in available if want in (p.get("name") or "").lower().replace(" ", "") or want in p["key"].lower()), None)
+        key = next((p["key"] for p in programs() if want in (p.get("name") or "").lower().replace(" ", "") or want in p["key"].lower()), None)
         if not key:
             raise HomeConnectError(config.say(f"The {name} has no program {program}. It has: ", f"De {name} heeft geen programma {program}. Wel: ")
-                                   + ", ".join(p.get("name") or p["key"].split(".")[-1] for p in available))
+                                   + ", ".join(p.get("name") or p["key"].split(".")[-1] for p in programs()))
     else:
         selected = (_call("GET", f"/api/homeappliances/{a['haId']}/programs/selected") or {}).get("data") or {}
         key = selected.get("key")
+    note = ""
+    if not key or ".Favorite." in key:
+        # (a favourite can't be started through Home Connect: a normal program instead, Auto, else Eco, else the first)
+        usable = [p["key"] for p in programs() if ".Favorite." not in p["key"]]
+        key = next((k for k in usable if "auto" in k.lower()), None) or next((k for k in usable if "eco" in k.lower()), None) or (usable[0] if usable else None)
         if not key:
             raise HomeConnectError(config.say(f"Pick a program on the {name} first, or say which.", f"Kies eerst een programma op de {name}, of zeg welk."))
+        note = config.say(" (the favourite picked on it can't be started remotely)", " (de gekozen favoriet kan niet op afstand starten)")
     _call("PUT", f"/api/homeappliances/{a['haId']}/programs/active", {"data": {"key": key}})
     log.write(f"Home Connect: {name} gestart ({key.split('.')[-1]})")
-    return config.say(f"The {name} is started.", f"De {name} is gestart.")
+    return config.say(f"The {name} is started: {label(key)}.", f"De {name} is gestart: {label(key)}.") + note
+
+
+def program_list(which=""):
+    a = find(which)
+    available = ((_call("GET", f"/api/homeappliances/{a['haId']}/programs/available") or {}).get("data") or {}).get("programs") or []
+    return ", ".join(p.get("name") or p["key"].split(".")[-1] for p in available if ".Favorite." not in p["key"]) or config.say("none", "geen")
 
 
 def power(which="", on=True):
