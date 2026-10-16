@@ -38,6 +38,9 @@ DEFAULTS = {
     "tvs": {},                      # {"woonkamer": {"host": …, "mac": …, "model": …}}
     "tv_default": "",               # the one used when you don't say which
     "tv_apps": {},                  # your own apps: {"Ziggo GO": "com.ziggo.tv"} (sudo dave tv add-app)
+    # The ATAG thermostat (sudo dave thermostaat setup)
+    "thermostat_host": "",
+    "thermostat_mac": "",
     # SmartThings (sudo dave smartthings token … or sudo dave smartthings login)
     "smartthings_token": "",
     "smartthings_client_id": "",

@@ -16,6 +16,7 @@
   sudo dave tv app netflix | apps | add-app "Ziggo GO" com.ziggo.tv
   sudo dave test-speaker | test-mic    check the sound
   sudo dave memory [list] | add "…" | remove <nr or words> | clear   what Dave remembers for good
+  sudo dave thermostaat setup | status | 21 | auto   the ATAG thermostat
   sudo dave timers                     timers, reminders and alarms (sudo dave timers cancel <woorden>)
   sudo dave alarm stop | snooze        stop the alarm that's going off
   sudo dave stopwatch [start|lap|pause|resume|stop|reset]
@@ -32,7 +33,7 @@ import sys
 import threading
 import time
 
-from . import appliances, brain, config, groq, hue, listen, smartthings, stopwatch, timers, tv, voice
+from . import appliances, brain, config, groq, hue, listen, smartthings, stopwatch, thermostat, timers, tv, voice
 
 
 def main(argv=None):
@@ -41,7 +42,7 @@ def main(argv=None):
         print(__doc__)
         return 0
     command, rest = args[0], args[1:]
-    handlers = {"run": run, "ask": ask, "chat": chat, "say": say, "setup": setup, "hue": hue_command, "smartthings": smartthings_command, "tv": tv_command,
+    handlers = {"run": run, "ask": ask, "chat": chat, "say": say, "setup": setup, "hue": hue_command, "smartthings": smartthings_command, "thermostaat": thermostat_command, "thermostat": thermostat_command, "tv": tv_command,
                 "update": update, "voice": voice_command, "memory": memory_command, "timers": timers_command, "alarm": alarm_command,
                 "stopwatch": stopwatch_command, "phone": phone_command, "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command}
     if command not in handlers:
@@ -54,7 +55,7 @@ def main(argv=None):
     except KeyboardInterrupt:
         print()
         return 130
-    except (groq.GroqError, hue.HueError, smartthings.SmartThingsError, tv.TVError) as e:
+    except (groq.GroqError, hue.HueError, smartthings.SmartThingsError, tv.TVError, thermostat.ThermostatError) as e:
         print(f"⚠ {e}")
         return 1
     except OSError as e:  # no connection, a missing program…: a short line, not a wall of text
@@ -351,6 +352,31 @@ def config_command(rest):
         print(f"{rest[0]} = {config.shown(rest[0], config.get(rest[0]))}")
 
 
+def thermostat_command(rest):
+    sub = rest[0].lower() if rest else "status"
+    if sub == "setup":
+        print("De thermostaat zoeken op je netwerk (hij meldt zich om de paar seconden; max. 25 s)…")
+        host = thermostat.discover()
+        typed = input(f"IP-adres van de thermostaat [{host or 'niet gevonden, typ hem (staat in je router)'}]: ").strip()
+        host = typed or host
+        if not host:
+            return 1
+        print("Koppelen… Kijk op het scherm van de thermostaat en bevestig het verzoek van Dave (max. 90 s).")
+        thermostat.pair(host, on_waiting=lambda: print("⏳ Wacht op je bevestiging op de thermostaat…"))
+        print("✅ Gekoppeld met de thermostaat.")
+        print(thermostat.status())
+    elif sub == "status":
+        print(thermostat.status())
+    elif sub.replace(",", ".").replace(".", "", 1).isdigit():
+        print(thermostat.set_temperature(float(sub.replace(",", "."))))
+    elif sub in ("warmer", "hoger"):
+        print(thermostat.set_temperature(change=1))
+    elif sub in ("kouder", "lager"):
+        print(thermostat.set_temperature(change=-1))
+    else:
+        print(thermostat.set_mode(" ".join(rest)))
+
+
 def timers_command(rest):
     if rest and rest[0] == "cancel":
         print(f"{timers.cancel('', ' '.join(rest[1:]))} geannuleerd.")
@@ -494,6 +520,7 @@ def status(_):
     print(f"SmartThings: {'✅ ' + st if st else '❌ (sudo dave smartthings token …)'}")
     print(f"Geheugen: {len(config.get('memories') or [])} dingen (sudo dave memory) · gepland: {timers.describe()}")
     print(f"Was/droger-meldingen: {'aan' if config.get('appliance_alerts') else 'uit'} · telefoon: {config.get('phone_topic') or '(geen, sudo dave phone <kanaal>)'}")
+    print(f"Thermostaat: {'✅ ' + config.get('thermostat_host') if config.get('thermostat_host') else '❌ (sudo dave thermostaat setup)'}")
     tvs = tv.all_tvs()
     print(f"TV's: " + (", ".join(f"{'⭐' if n == tv.default() else ''}{n} ({i.get('model') or i.get('host')})" for n, i in tvs.items()) if tvs else "❌ (sudo dave tv setup)"))
     print(f"Wekwoord: \"{config.get('wake_phrase')}\" · model {'✅' if os.path.isdir(listen.MODEL) else '❌ ' + listen.MODEL}")

@@ -9,7 +9,7 @@ import re
 import subprocess
 import time
 
-from . import config, groq, hue, smartthings, stopwatch, timers, tv
+from . import config, groq, hue, smartthings, stopwatch, thermostat, timers, tv
 
 PERSONALITIES = {
     "normal": "",
@@ -58,6 +58,11 @@ TOOLS = [
            "value": _s("For app: the app's name (Netflix, YouTube, Disney+, Videoland…) or the link to a series/film/video; for volume: how many steps"),
            "play": {"type": "boolean", "description": "For a series/film/video link: start playing it"},
            "tv": _s("Which TV, by its name (see the list); empty = the default one. Only fill it in when the user said which.")}, ["action"]),
+    _tool("thermostat", "The heating (ATAG thermostat): how warm it is inside and what it's set to ('status'), set a temperature "
+          "('zet de verwarming op 21': set, value 21), warmer or colder ('iets warmer': change, value 1; 'twee graden kouder': value -2), "
+          "or the program: automatic (back to the schedule), manual, vacation, fireplace ('mode', value automatic).",
+          {"action": {"type": "string", "enum": ["status", "set", "change", "mode"]},
+           "value": _s("For set: the temperature in °C; for change: + or - degrees; for mode: automatic, manual, vacation or fireplace")}, ["action"]),
     _tool("timer", "Timers: set one ('a timer for 10 minutes for the pizza'), list them ('how long does my timer still take?') or cancel.",
           {"action": {"type": "string", "enum": ["set", "list", "cancel"]},
            "seconds": {"type": "number", "description": "For set: how long, in seconds"},
@@ -109,7 +114,7 @@ def _system():
     personality = PERSONALITIES.get(config.get("personality"), "")
     return (f"{personality}\n\nYou are {name}, a voice assistant on a smart speaker in the user's home (a Raspberry Pi), like a Google Home. "
             f"Always answer in {language} (also short confirmations), unless the user speaks another language. Your answers are spoken: one or two short sentences, plain speech, "
-            "no lists, no markdown, no emoji, no links. Use your commands for the lights (Hue), the TV, Samsung devices (SmartThings), timers, reminders, "
+            "no lists, no markdown, no emoji, no links. Use your commands for the lights (Hue), the heating (thermostat), the TV, Samsung devices (SmartThings), timers, reminders, "
             "alarms, the stopwatch and the volume; when the user asks for several things at once, do all of them. Look things up on the web for news, weather and facts. "
             f"It's {time.strftime('%A %d %B %Y, %H:%M')} now. Only end with a question when you really need an answer (then the speaker keeps " +
             "listening); never add filler questions like 'Anything else?' or 'Is er verder nog iets?', just stop after the answer."
@@ -143,6 +148,15 @@ def _run(name, args):
             return smartthings.command(device, args.get("capability", "switch"), args.get("command", ""), arguments)
         if name == "tv":
             return tv.control(args.get("action", "status"), str(args.get("value") or ""), args.get("tv") or "", bool(args.get("play")))
+        if name == "thermostat":
+            action, value = args.get("action", "status"), str(args.get("value") or "").replace(",", ".").replace("°", "").strip()
+            if action == "set":
+                return thermostat.set_temperature(float(value))
+            if action == "change":
+                return thermostat.set_temperature(change=float(value or 1))
+            if action == "mode":
+                return thermostat.set_mode(value or "automatic")
+            return thermostat.status()
         if name == "timer":
             action = args.get("action")
             if action == "set":
@@ -179,7 +193,7 @@ def _run(name, args):
         if name == "set_personality":
             config.set("personality", args.get("personality", "normal"))
             return f"personality is now {config.get('personality')}"
-    except (hue.HueError, smartthings.SmartThingsError, tv.TVError) as e:
+    except (hue.HueError, smartthings.SmartThingsError, tv.TVError, thermostat.ThermostatError) as e:
         return f"Failed: {e}"
     except Exception as e:
         return f"Failed ({type(e).__name__}): {e}"

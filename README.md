@@ -52,6 +52,12 @@ de tv verschijnt. Zet op de tv ook *inschakelen via netwerk* aan. Daarna: *"hey 
 Meerdere tv's (ook een Chromecast met Google TV): geef ze elk een naam bij `sudo dave tv setup` (*"zet Netflix op de slaapkamer-tv"*), en kies
 met `sudo dave tv default <naam>` welke hij pakt als je geen naam noemt. `sudo dave tv list` laat ze zien (⭐ = standaard).
 
+## De verwarming (ATAG-thermostaat)
+
+`sudo dave thermostaat setup` — Dave zoekt de thermostaat op je netwerk; bevestig daarna het verzoek op het scherm van de thermostaat.
+Daarna: *"hoe warm is het binnen?"*, *"zet de verwarming op 21 graden"*, *"iets warmer"*, *"zet de verwarming terug op het klokprogramma"*.
+In de terminal: `sudo dave thermostaat`, `sudo dave thermostaat 20.5`, `sudo dave thermostaat auto`.
+
 ## Timers, herinneringen, wekker en stopwatch
 
 - *"Zet een timer van 10 minuten voor de pizza"*, *"hoe lang duurt mijn timer nog?"*
