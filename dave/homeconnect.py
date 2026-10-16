@@ -130,8 +130,8 @@ def _call(method, path, body=None):
             raise HomeConnectError(config.say("Home Connect's limit for today is reached (1000 requests). Tomorrow it works again.",
                                               "De limiet van Home Connect voor vandaag is bereikt (1000 vragen). Morgen werkt het weer.")) from e
         if e.code == 409 or error.get("key") in ("SDK.Error.HomeAppliance.Connection.Initialization.Failed", "SDK.Error.ApplianceNotConnected"):
-            raise HomeConnectError(config.say("The appliance isn't connected to Home Connect right now (is it off or offline?).",
-                                              "Het apparaat is nu niet verbonden met Home Connect (staat hij uit of offline?).")) from e
+            raise HomeConnectError(config.say("The appliance isn't connected right now: Home Connect only reaches it while it's switched on.",
+                                              "Het apparaat is nu niet verbonden: Home Connect bereikt hem alleen als hij aan staat.")) from e
         raise HomeConnectError(f"Home Connect {e.code}: {error.get('description') or error.get('key') or ''}") from e
     except OSError as e:
         raise HomeConnectError(config.say("I can't reach Home Connect.", "Ik kan Home Connect niet bereiken.")) from e
@@ -186,7 +186,8 @@ def status(which=""):
     a = find(which)
     name = _name(a)
     if not a.get("connected", True):
-        return config.say(f"The {name} is offline (off, or not on Wi-Fi).", f"De {name} is offline (uit, of niet op wifi).")
+        return config.say(f"The {name} is off: Home Connect only reaches it while it's switched on (or it's off Wi-Fi).",
+                          f"De {name} staat uit: Home Connect bereikt hem alleen als hij aan staat (of hij is van de wifi af).")
     s = _values(((_call("GET", f"/api/homeappliances/{a['haId']}/status") or {}).get("data") or {}).get("status"))
     parts = [config.say(f"The {name} is {_state(s.get('OperationState'))}", f"De {name} is {_state(s.get('OperationState'))}")]
     if str(s.get("OperationState", "")).endswith(("Run", "Pause", "DelayedStart")):
