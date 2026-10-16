@@ -35,12 +35,58 @@ def _speakable(text):
     return re.sub(r"\*\*|__|`|#+ ", "", text).strip()
 
 
+PIPER = "/opt/dave/piper/piper"
+VOICES = "/opt/dave/voices"
+# Offline voices (Piper): name → its file on Hugging Face (rhasspy/piper-voices)
+PIPER_VOICES = {
+    "pim": "nl/nl_NL/pim/medium/nl_NL-pim-medium", "ronnie": "nl/nl_NL/ronnie/medium/nl_NL-ronnie-medium",
+    "mls": "nl/nl_NL/mls/medium/nl_NL-mls-medium", "nathalie": "nl/nl_BE/nathalie/medium/nl_BE-nathalie-medium",
+    "ryan": "en/en_US/ryan/medium/en_US-ryan-medium", "amy": "en/en_US/amy/medium/en_US-amy-medium",
+}
+
+
+def _piper_binary():
+    return PIPER if os.path.exists(PIPER) else shutil.which("piper")
+
+
 def engine():
-    if config.get("azure_key"):
+    """Which voice speaks: the setting voice_engine (auto = Azure when there's a key; offline = Piper, or espeak without it)."""
+    choice = (config.get("voice_engine") or "auto").lower()
+    piper = bool(config.get("piper_model") and os.path.exists(config.get("piper_model")) and _piper_binary())
+    if choice in ("auto", "azure") and config.get("azure_key"):
         return "azure"
-    if config.get("piper_model") and os.path.exists(config.get("piper_model")) and shutil.which("piper"):
-        return "piper"
-    return "espeak"
+    if choice == "espeak":
+        return "espeak"
+    return "piper" if piper else "espeak"
+
+
+def install_piper(name):
+    """Downloads Piper (offline speech) and the voice [name] into /opt/dave. Returns the voice file."""
+    import tarfile
+    if name not in PIPER_VOICES:
+        raise ValueError(f"Unknown voice {name}; choose from: {', '.join(PIPER_VOICES)}")
+    if not os.path.exists(PIPER):
+        print("Piper downloaden (± 25 MB)…", flush=True)
+        status, data = web.request("GET", "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_aarch64.tar.gz", timeout=300)
+        if status != 200:
+            raise OSError(f"Piper download failed ({status})")
+        archive = "/tmp/piper.tar.gz"
+        with open(archive, "wb") as f:
+            f.write(data)
+        with tarfile.open(archive) as t:
+            t.extractall("/opt/dave")  # (a folder "piper" with the program)
+        os.unlink(archive)
+    os.makedirs(VOICES, exist_ok=True)
+    path = os.path.join(VOICES, os.path.basename(PIPER_VOICES[name]) + ".onnx")
+    if not os.path.exists(path):
+        print(f"Stem {name} downloaden (± 60 MB)…", flush=True)
+        for ext in (".onnx", ".onnx.json"):
+            status, data = web.request("GET", f"https://huggingface.co/rhasspy/piper-voices/resolve/main/{PIPER_VOICES[name]}{ext}", timeout=600)
+            if status != 200:
+                raise OSError(f"Voice download failed ({status})")
+            with open(path.replace(".onnx", ext), "wb") as f:
+                f.write(data)
+    return path
 
 
 def speak(text):
@@ -81,7 +127,7 @@ def _piper(text):
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
         out = f.name
     try:
-        subprocess.run(["piper", "--model", config.get("piper_model"), "--output_file", out], input=text.encode("utf-8"),
+        subprocess.run([_piper_binary(), "--model", config.get("piper_model"), "--output_file", out], input=text.encode("utf-8"),
                        check=True, capture_output=True, timeout=60)
         with open(out, "rb") as f:
             return f.read()

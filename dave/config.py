@@ -12,6 +12,7 @@ DEFAULTS = {
     "wake_phrase": "hey dave",
     "groq_key": "",                 # free at console.groq.com/keys: the AI and speech recognition
     # The voice: Azure (natural, online) when there's a key, otherwise Piper (offline) if installed, otherwise espeak-ng
+    "voice_engine": "auto",         # auto (Azure when there's a key), azure, or offline (Piper if installed, else espeak)
     "azure_key": "",
     "azure_region": "westeurope",
     "azure_voice": "nl-NL-FennaNeural",

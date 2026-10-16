@@ -5,6 +5,7 @@
   sudo dave ask "zet de lampen op paars" ask something (typed instead of spoken), and hear the answer
   sudo dave chat                       keep typing questions (Ctrl+C to stop)
   sudo dave say "hallo"                just say something (tests the voice)
+  sudo dave voice offline | azure | auto | install [pim|ronnie|mls|nathalie]   which voice
   sudo dave hue setup | list           connect the Hue Bridge / show lights and rooms
   sudo dave smartthings token <token>  connect SmartThings with a personal token (valid 24 hours)
   sudo dave smartthings login          connect SmartThings for good (OAuth)
@@ -36,7 +37,7 @@ def main(argv=None):
         return 0
     command, rest = args[0], args[1:]
     handlers = {"run": run, "ask": ask, "chat": chat, "say": say, "setup": setup, "hue": hue_command, "smartthings": smartthings_command, "tv": tv_command,
-                "update": update, "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command}
+                "update": update, "voice": voice_command, "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command}
     if command not in handlers:
         print(f"Onbekend commando: {command}\n{__doc__}")
         return 1
@@ -294,6 +295,30 @@ def config_command(rest):
         value = " ".join(rest[1:])
         config.set(rest[0], float(value) if rest[0] == "mic_sensitivity" else value)
         print(f"{rest[0]} = {config.shown(rest[0], config.get(rest[0]))}")
+
+
+def voice_command(rest):
+    sub = (rest[0] if rest else "").lower()
+    if sub in ("offline", "azure", "auto", "espeak"):
+        config.set("voice_engine", sub)
+        if sub == "offline" and voice.engine() == "espeak":
+            print("Offline stem aan. Dit is nu espeak (robotachtig). Een veel mooiere offline stem: sudo dave voice install")
+        if sub == "azure" and not config.get("azure_key"):
+            print("Er is nog geen Azure-sleutel: zet hem met sudo dave setup")
+        print(f"Stem: {voice.engine()}")
+        voice.speak(config.say("This is my voice now.", "Zo klink ik nu."))
+    elif sub == "install":
+        name = (rest[1] if len(rest) > 1 else ("pim" if config.dutch() else "ryan")).lower()
+        path = voice.install_piper(name)
+        config.load().update({"piper_model": path, "voice_engine": "offline"}); config.save()
+        print(f"✅ Offline stem {name} geïnstalleerd en aangezet. (Andere: {', '.join(voice.PIPER_VOICES)}; terug naar Azure: sudo dave voice azure)")
+        voice.speak(config.say(f"Hi, I'm {config.get('name')}, now with an offline voice.", f"Hoi, ik ben {config.get('name')}, nu met een offline stem."))
+    else:
+        print(f"Nu: {voice.engine()} (instelling: {config.get('voice_engine')}).")
+        print("  sudo dave voice offline     offline stem (Piper, of espeak als Piper er niet is)")
+        print("  sudo dave voice install     Piper + een Nederlandse stem installeren (pim, ronnie, mls of nathalie)")
+        print("  sudo dave voice azure       de Azure-stem (online)")
+        print("  sudo dave voice auto        Azure als er een sleutel is, anders offline")
 
 
 def update(_):
