@@ -9,7 +9,7 @@ import re
 import subprocess
 import time
 
-from . import config, groq, hue, log, smartthings, stopwatch, thermostat, timers, tv
+from . import config, groq, hue, lists, log, smartthings, stopwatch, thermostat, timers, tv
 
 PERSONALITIES = {
     "normal": "",
@@ -101,6 +101,13 @@ TOOLS = [
           {"fact": _s("The note, short, in the user's language (e.g. 'Houdt van warm wit licht', 'Code fietsenstalling: 4821')")}, ["fact"]),
     _tool("forget", "Forget something you remembered ('vergeet dat van de fietsenstalling', 'forget my birthday'); 'everything' forgets all.",
           {"fact": _s("Words from what to forget, or 'everything'")}, ["fact"]),
+    _tool("lists", "The house's lists (shopping list, chores, …), the same as in the Lists tab on the phones: add things "
+          "('zet melk en eieren op de boodschappenlijst': add, list boodschappen, items 'melk, eieren'), remove them, tick them off, "
+          "what's on a list (show; no list = all of them), make a new list (create, list = its name), delete a list, "
+          "or take the ticked-off ones away (clear_done). Leave list empty when the user doesn't say which.",
+          {"action": {"type": "string", "enum": ["show", "add", "remove", "check", "uncheck", "create", "delete", "clear_done"]},
+           "list": _s("Which list, by its name; for create: the new list's name"),
+           "items": _s("For add / remove / check / uncheck: the things, comma-separated, short, in the user's language")}, ["action"]),
     _tool("set_personality", "Change how you talk: normal, chill, hyped, butler or sarcastic ('be a butler', 'act normal').",
           {"personality": {"type": "string", "enum": list(PERSONALITIES)}}, ["personality"]),
 ]
@@ -113,6 +120,9 @@ def _tools():
     unused = {name for name, ready in (("hue", config.get("hue_user")), ("tv", tvs), ("thermostat", config.get("thermostat_host")),
                                        ("smartthings", config.get("smartthings_token") or config.get("smartthings_refresh"))) if not ready}
     tools = [t for t in json.loads(json.dumps(TOOLS)) if t["function"]["name"] not in unused]
+    for t in tools:
+        if t["function"]["name"] == "lists":
+            t["function"]["description"] += f" The lists now: {', '.join(l['name'] for l in lists.visible()) or 'none yet'}."
     if len(tvs) > 1:
         for t in tools:
             if t["function"]["name"] == "tv":
@@ -126,7 +136,7 @@ def _system():
     personality = PERSONALITIES.get(config.get("personality"), "")
     return (f"{personality}\n\nYou are {name}, a voice assistant on a smart speaker in the user's home (a Raspberry Pi), like a Google Home. Made by Jorn Jansen. License (only if asked): PolyForm Strict 1.0.0, so it may be downloaded and used for personal, non-commercial use, but not changed, copied, redistributed or sold. It is NOT open source and NOT MIT. "
             f"Always answer in {language} (also short confirmations), unless the user speaks another language. Your answers are spoken: one or two short sentences, plain speech, "
-            "no lists, no markdown, no emoji, no links. Use your commands for the lights (Hue), the heating (thermostat), the TV, Samsung devices (SmartThings), timers, reminders, "
+            "no lists, no markdown, no emoji, no links. Use your commands for the lights (Hue), the heating (thermostat), the lists (shopping list…), the TV, Samsung devices (SmartThings), timers, reminders, "
             "alarms, the stopwatch and the volume; when the user asks for several things at once, do all of them. Look things up on the web for news, weather and facts. "
             f"It's {time.strftime('%A %d %B %Y, %H:%M')} now. Only end with a question when you really need an answer (then the speaker keeps " +
             "listening); never add filler questions like 'Anything else?' or 'Is er verder nog iets?', just stop after the answer."
@@ -203,6 +213,22 @@ def _run(name, args):
             if action == "cancel":
                 return timers.cancel("alarm", args.get("label") or args.get("when") or "")  # (the AI sometimes gives the time as when)
             return timers.describe("alarm")
+        if name == "lists":
+            action, which = args.get("action", "show"), args.get("list") or ""
+            things = [t.strip() for t in re.split(r",| en | and ", args.get("items") or "") if t.strip()]
+            if action == "create":
+                return lists.create(which)
+            if action == "delete":
+                return lists.delete(which)
+            if action == "add":
+                return lists.add(which, things)
+            if action == "remove":
+                return lists.remove(which, things)
+            if action in ("check", "uncheck"):
+                return lists.check(which, things, action == "check")
+            if action == "clear_done":
+                return lists.clear(which)
+            return lists.describe(which)
         if name == "stopwatch":
             return stopwatch.run(args.get("action", "check"))
         if name == "volume":
@@ -214,7 +240,7 @@ def _run(name, args):
         if name == "set_personality":
             config.set("personality", args.get("personality", "normal"))
             return f"personality is now {config.get('personality')}"
-    except (hue.HueError, smartthings.SmartThingsError, tv.TVError, thermostat.ThermostatError) as e:
+    except (hue.HueError, smartthings.SmartThingsError, tv.TVError, thermostat.ThermostatError, lists.ListError) as e:
         return f"Failed: {e}"
     except Exception as e:
         return f"Failed ({type(e).__name__}): {e}"

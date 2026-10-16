@@ -19,6 +19,8 @@
   sudo dave thermostaat setup | status | 21 | auto   the ATAG thermostat
   sudo dave timers                     timers, reminders and alarms (sudo dave timers cancel <woorden>)
   sudo dave alarm [7:30 | remove [tijd] | stop | snooze]   alarms: list, set, remove, stop
+  sudo dave lijst [naam] | koppel [nieuw] | maak <naam> | weg <naam>   the lists (shared with Dave on your iPhone)
+  sudo dave lijst <naam> + melk, eieren  |  sudo dave lijst <naam> - melk   on and off a list
   sudo dave stopwatch [start|lap|pause|resume|stop|reset]
   sudo dave phone <ntfy-kanaal>        announcements (washer done, reminders) to your phone too
   sudo dave log [live | 200 | <woord>] the logbook: everything Dave did, when, and who asked for it
@@ -34,7 +36,7 @@ import sys
 import threading
 import time
 
-from . import appliances, brain, config, groq, hue, listen, log, smartthings, stopwatch, thermostat, timers, tv, voice
+from . import appliances, brain, config, groq, hue, listen, lists, log, smartthings, stopwatch, thermostat, timers, tv, voice
 
 
 def main(argv=None):
@@ -45,7 +47,7 @@ def main(argv=None):
     command, rest = args[0], args[1:]
     handlers = {"run": run, "ask": ask, "chat": chat, "say": say, "setup": setup, "hue": hue_command, "smartthings": smartthings_command, "thermostaat": thermostat_command, "thermostat": thermostat_command, "tv": tv_command,
                 "update": update, "voice": voice_command, "memory": memory_command, "timers": timers_command, "alarm": alarm_command,
-                "stopwatch": stopwatch_command, "phone": phone_command, "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command, "log": log_command}
+                "stopwatch": stopwatch_command, "phone": phone_command, "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command, "log": log_command, "lijst": list_command, "lijsten": list_command, "list": list_command, "lists": list_command}
     if command not in handlers:
         print(f"Onbekend commando: {command}\n{__doc__}")
         return 1
@@ -60,7 +62,7 @@ def main(argv=None):
     except KeyboardInterrupt:
         print()
         return 130
-    except (groq.GroqError, hue.HueError, smartthings.SmartThingsError, tv.TVError, thermostat.ThermostatError) as e:
+    except (groq.GroqError, hue.HueError, smartthings.SmartThingsError, tv.TVError, thermostat.ThermostatError, lists.ListError) as e:
         print(f"⚠ {e}")
         return 1
     except OSError as e:  # no connection, a missing program…: a short line, not a wall of text
@@ -110,6 +112,7 @@ def run(_):
     _announcements()
     timers.start()
     appliances.start()
+    lists.start()
     phrase = config.get("wake_phrase") or f"hey {config.get('name').lower()}"
     print(f"{config.get('name')} op de Pi draait. Luistert naar \"{phrase}\".", flush=True)
     if not config.get("groq_key"):
@@ -343,6 +346,40 @@ def tv_command(rest):
         print(tv.control(sub, " ".join(rest[1:]), which))
 
 
+def list_command(rest):
+    sub = rest[0].lower() if rest else ""
+    if sub == "koppel":
+        if rest[1:2] == ["nieuw"]:
+            config.set("lists_code", lists.new_code())
+            config.set("lists_since", "")
+            print("Nieuwe huiscode gemaakt: telefoons met de oude code zien de lijsten niet meer.")
+            if _service_running():
+                subprocess.run(["systemctl", "restart", "dave"])
+        c = lists.code()
+        print(f"Huiscode: {c}\n")
+        print("Op je iPhone: Dave → Lijsten → ⚙ (Huis koppelen) → vul de code in of scan deze QR-code met de camera:\n")
+        link = f"dave-iphone://lists?code={c}"
+        try:
+            subprocess.run(["qrencode", "-t", "ansiutf8", link], check=True)
+        except (OSError, subprocess.CalledProcessError):
+            print(f"(geen QR: sudo apt install qrencode)  {link}")
+        print("\nIedereen met deze code ziet de lijsten van het huis. Uitgelekt? sudo dave lijst koppel nieuw")
+        return
+    if sub in ("maak", "nieuw", "new", "create") and len(rest) > 1:
+        print(lists.create(" ".join(rest[1:])))
+        return
+    if sub in ("weg", "verwijder", "delete", "remove") and len(rest) > 1:
+        print(lists.delete(" ".join(rest[1:])))
+        return
+    text = " ".join(rest)
+    for sign, do in (("+", lists.add), ("-", lists.remove)):
+        if f" {sign} " in f" {text} ":
+            name, _, things = f" {text} ".partition(f" {sign} ")
+            print(do(name.strip(), [t.strip() for t in things.split(",") if t.strip()]))
+            return
+    print(lists.describe(text).replace("; ", "\n"))
+
+
 def _without_keys(command, rest):
     """A command for the logbook, without keys: a setting's value only for normal settings, no tokens."""
     if command == "config" and len(rest) > 1 and (rest[0] in config.SECRETS or rest[0] not in config.DEFAULTS):
@@ -574,6 +611,7 @@ def status(_):
     print(f"SmartThings: {'✅ ' + st if st else '❌ (sudo dave smartthings token …)'}")
     print(f"Geheugen: {len(config.get('memories') or [])} dingen (sudo dave memory) · gepland: {timers.describe()}")
     print(f"Was/droger-meldingen: {'aan' if config.get('appliance_alerts') else 'uit'} · telefoon: {config.get('phone_topic') or '(geen, sudo dave phone <kanaal>)'}")
+    print(f"Lijsten: {len(lists.visible())} · gedeeld met telefoons via de huiscode (sudo dave lijst koppel)")
     print(f"Thermostaat: {'✅ ' + config.get('thermostat_host') if config.get('thermostat_host') else '❌ (sudo dave thermostaat setup)'}")
     tvs = tv.all_tvs()
     print(f"TV's: " + (", ".join(f"{'⭐' if n == tv.default() else ''}{n} ({i.get('model') or i.get('host')})" for n, i in tvs.items()) if tvs else "❌ (sudo dave tv setup)"))

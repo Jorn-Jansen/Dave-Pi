@@ -2,6 +2,7 @@
 
 import json
 import os
+import threading
 
 PATH = os.environ.get("DAVE_CONFIG", "/etc/dave/config.json")
 
@@ -39,6 +40,11 @@ DEFAULTS = {
     # The ATAG thermostat (sudo dave thermostaat setup)
     "thermostat_host": "",
     "thermostat_mac": "",
+    # Lists, shared with the phones (sudo dave lijst koppel)
+    "lists": [],
+    "lists_code": "",
+    "lists_since": "",
+    "lists_device": "",
     # SmartThings (sudo dave smartthings token … or sudo dave smartthings login)
     "smartthings_token": "",
     "smartthings_client_id": "",
@@ -50,7 +56,7 @@ DEFAULTS = {
 }
 
 OLD = {"alarm_lights", "alarm_room"}  # (settings Dave doesn't have anymore)
-SECRETS = {"groq_key", "azure_key", "hue_user", "smartthings_token", "smartthings_client_secret", "smartthings_refresh", "smartthings_access"}
+SECRETS = {"lists_code", "groq_key", "azure_key", "hue_user", "smartthings_token", "smartthings_client_secret", "smartthings_refresh", "smartthings_access"}
 
 _cache = None
 _mtime = None
@@ -88,20 +94,25 @@ def get(key):
     return load().get(key, DEFAULTS.get(key))
 
 
+_saving = threading.RLock()  # (timers, the washer and the lists each have a thread: one save at a time)
+
+
 def set(key, value):
-    load()[key] = value
-    save()
+    with _saving:
+        load()[key] = value
+        save()
 
 
 def save():
-    os.makedirs(os.path.dirname(PATH), exist_ok=True)
-    temp = PATH + ".tmp"
-    with open(temp, "w", encoding="utf-8") as f:
-        json.dump(_cache if _cache is not None else load(), f, indent=2, ensure_ascii=False)  # (what is in memory now, also when the file changed meanwhile)
-    os.chmod(temp, 0o600)
-    os.replace(temp, PATH)
-    global _mtime
-    _mtime = os.path.getmtime(PATH)
+    with _saving:
+        os.makedirs(os.path.dirname(PATH), exist_ok=True)
+        temp = PATH + ".tmp"
+        with open(temp, "w", encoding="utf-8") as f:
+            json.dump(_cache if _cache is not None else load(), f, indent=2, ensure_ascii=False)  # (what is in memory now, also when the file changed meanwhile)
+        os.chmod(temp, 0o600)
+        os.replace(temp, PATH)
+        global _mtime
+        _mtime = os.path.getmtime(PATH)
 
 
 def dutch():
