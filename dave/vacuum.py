@@ -52,6 +52,8 @@ def _protocol():
 def _login():
     """The Dreame cloud, logged in (once per run; the key it gives is kept, so the password is only needed again when it runs out)."""
     global _cloud
+    if not ready():
+        raise VacuumError(config.say("Not logged in to Dreame yet: sudo dave stofzuiger login", "Nog niet ingelogd bij Dreame: sudo dave stofzuiger login"))
     with _lock:
         if _cloud and _cloud.logged_in:
             return _cloud

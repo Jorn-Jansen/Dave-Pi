@@ -363,7 +363,7 @@ def tv_command(rest):
 def vacuum_command(rest):
     sub = rest[0].lower() if rest else "status"
     which = " ".join(rest[1:])
-    if sub == "login":
+    if sub in ("login", "setup", "inloggen"):
         print("Inloggen met het account van de Dreamehome-app (het wachtwoord blijft alleen op deze Pi).")
         user = input("E-mailadres (of telefoonnummer): ").strip()
         password = getpass.getpass("Wachtwoord: ")
