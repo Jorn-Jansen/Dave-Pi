@@ -244,8 +244,11 @@ def start(which="", program=""):
         want = program.lower().replace(" ", "")
         key = next((p["key"] for p in programs() if want in (p.get("name") or "").lower().replace(" ", "") or want in p["key"].lower()), None)
         if not key:
-            raise HomeConnectError(config.say(f"The {name} has no program {program}. It has: ", f"De {name} heeft geen programma {program}. Wel: ")
-                                   + ", ".join(p.get("name") or p["key"].split(".")[-1] for p in programs()))
+            now = ", ".join(p.get("name") or p["key"].split(".")[-1] for p in programs() if ".Favorite." not in p["key"]) or config.say("none", "geen")
+            raise HomeConnectError(config.say(f"Home Connect doesn't offer {program} to start remotely right now (only: {now}). Pick {program} on the "
+                                              f"{name} itself, switch on remote start, and say just 'start the {name}': then I start what's picked.",
+                                              f"Home Connect biedt {program} nu niet aan om op afstand te starten (alleen: {now}). Kies {program} op de "
+                                              f"{name} zelf, zet op afstand starten aan, en zeg alleen 'start de {name}': dan start ik wat daar gekozen is."))
     else:
         selected = (_call("GET", f"/api/homeappliances/{a['haId']}/programs/selected") or {}).get("data") or {}
         key = selected.get("key")
