@@ -57,10 +57,11 @@ TOOLS = [
           "A specific series, film or video ('put Stranger Things on Netflix', 'play The Boys on Prime'): first look up its page on the web, then " +
           "action app with value = that link (netflix.com/title/<id>, primevideo.com/detail/…, youtube.com/watch?v=…, disneyplus.com/…) and play = true.",
           {"action": {"type": "string", "enum": ["on", "off", "status", "app", "volume_up", "volume_down", "mute", "home", "back", "play_pause",
-                                                 "play", "pause", "next", "previous", "up", "down", "left", "right", "ok", "channel_up", "channel_down", "input", "settings"]},
+                                                 "play", "pause", "next", "previous", "up", "down", "left", "right", "ok", "channel_up", "channel_down", "input", "settings", "make_default"]},
            "value": _s("For app: the app's name (Netflix, YouTube, Disney+, Videoland…) or the link to a series/film/video; for volume: how many steps"),
            "play": {"type": "boolean", "description": "For a series/film/video link: start playing it"},
-           "tv": _s("Which TV, by its name (see the list); empty = the default one. Only fill it in when the user said which.")}, ["action"]),
+           "tv": _s("Which TV, by its name (see the list); empty = the default one. Only fill it in when the user said which. "
+                    "For make_default ('maak de woonkamer de standaard-tv'): the TV that becomes the default")}, ["action"]),
     _tool("thermostat", "The heating (ATAG thermostat): how warm it is inside and what it's set to ('status'), set a temperature "
           "('zet de verwarming op 21': set, value 21), warmer or colder ('iets warmer': change, value 1; 'twee graden kouder': value -2), "
           "or the program: automatic (back to the schedule), manual, vacation, fireplace ('mode', value automatic).",
@@ -214,6 +215,8 @@ def _run(name, args):
             arguments = [int(a) if isinstance(a, str) and a.lstrip("-").isdigit() else a for a in (args.get("arguments") or [])]  # (numbers as numbers)
             return smartthings.command(device, args.get("capability", "switch"), args.get("command", ""), arguments)
         if name == "tv":
+            if args.get("action") == "make_default":
+                return config.say(f"{tv.set_default(args.get('tv') or '')} is now the default TV.", f"{tv.set_default(args.get('tv') or '')} is nu de standaard-tv.")
             return tv.control(args.get("action", "status"), str(args.get("value") or ""), _which_tv(args), bool(args.get("play")))
         if name == "thermostat":
             action, value = args.get("action", "status"), str(args.get("value") or "").replace(",", ".").replace("°", "").strip()

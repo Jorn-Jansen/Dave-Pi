@@ -63,9 +63,16 @@ _cache = None
 _mtime = None
 
 
+def _stamp():
+    """What the file is now: its time, size and inode. (Every save replaces the file, so the inode changes too: the time alone
+    isn't enough on Linux, where it can be the same for two saves close together, and another Dave process's change would be lost.)"""
+    s = os.stat(PATH)
+    return (s.st_mtime_ns, s.st_size, s.st_ino)
+
+
 def _changed_on_disk():
     try:
-        return os.path.getmtime(PATH) != _mtime
+        return _stamp() != _mtime
     except OSError:
         return False
 
@@ -74,7 +81,7 @@ def load():
     global _cache, _mtime
     if _cache is None or _changed_on_disk():  # (another Dave process, like the service, may have changed it)
         try:
-            _mtime = os.path.getmtime(PATH)
+            _mtime = _stamp()
         except OSError:
             _mtime = None
         data = {}
@@ -113,7 +120,7 @@ def save():
         os.chmod(temp, 0o600)
         os.replace(temp, PATH)
         global _mtime
-        _mtime = os.path.getmtime(PATH)
+        _mtime = _stamp()
 
 
 def dutch():

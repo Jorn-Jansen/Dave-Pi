@@ -167,7 +167,7 @@ def plan(name, args, label, seconds=None, when="", part="", repeat="none"):
     """One of Dave's commands later: in [seconds], or at [when] (like an alarm: the first coming time)."""
     at = time.time() + float(seconds) if seconds not in (None, "") else parse_when(when, part=part)
     item = _add("action", at, label or name, repeat, do={"name": name, "args": args})
-    return f"planned: {label or name} {_moment(at)} (in {duration(round(at - time.time()))}). It happens by itself then: don't do it now."
+    return f"planned: {label or name} {_moment(at)} (in {duration(round(at - time.time()))}). It happens by itself then: don't do it now. Tell the user in their own words and language."
 
 
 def alarm(when, repeat="none", label="", part="", replace=()):
@@ -188,7 +188,7 @@ def alarm(when, repeat="none", label="", part="", replace=()):
         said.append(f"alarm set: {_moment(at)}, in {duration(round((at - time.time()) / 60) * 60)}" + (f", {repeat}" if repeat != "none" else "")
                     + (f" ({label})" if label else "")
                     + (" (that time today has just passed, so it's tomorrow: this is right, tell the user why)" if just_past else ""))
-    return "; ".join(said) + ". Done: tell the user this time.", ids
+    return "; ".join(said) + ". Done: tell the user this time, in their own words and language.", ids
 
 
 def _ring(item):
