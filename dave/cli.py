@@ -18,7 +18,7 @@
   sudo dave memory [list] | add "…" | remove <nr or words> | clear   what Dave remembers for good
   sudo dave thermostaat setup | status | 21 | auto   the ATAG thermostat
   sudo dave timers                     timers, reminders and alarms (sudo dave timers cancel <woorden>)
-  sudo dave alarm stop | snooze        stop the alarm that's going off
+  sudo dave alarm [7:30 | remove [tijd] | stop | snooze]   alarms: list, set, remove, stop
   sudo dave stopwatch [start|lap|pause|resume|stop|reset]
   sudo dave phone <ntfy-kanaal>        announcements (washer done, reminders) to your phone too
   sudo dave status                     what's set up, and the service
@@ -390,6 +390,10 @@ def alarm_command(rest):
         print(timers.stop_alarm())
     elif sub == "snooze":
         print(timers.snooze(float(rest[1]) if len(rest) > 1 else 9))
+    elif sub in ("remove", "cancel", "delete", "verwijder", "weg", "uit"):
+        print(timers.cancel("alarm", " ".join(rest[1:])))
+    elif sub and sub[0].isdigit():
+        print(timers.alarm(sub, label=" ".join(rest[1:])))
     else:
         print(timers.describe("alarm"))
 

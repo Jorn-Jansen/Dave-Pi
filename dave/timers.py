@@ -114,34 +114,67 @@ def timer(seconds, label=""):
 
 # --- Reminders ---
 
-def parse_when(when="", minutes=None):
-    """'2026-10-17 09:00', '09:00' (today, or tomorrow when it's past) or minutes from now → a moment."""
+PARTS = {"morning": (0, 11), "afternoon": (12, 17), "evening": (17, 23), "night": (0, 5)}
+
+
+def _hours(hour, part=""):
+    """The hours a spoken time can mean: '2:05' is 02:05 or 14:05 (whichever comes first), unless the part of the day says which
+    ('s middags / 's avonds → 14:05, 's nachts / 's ochtends → 02:05) or it's on a 24-hour clock already (14:05, 00:30)."""
+    if part in PARTS:
+        low, high = PARTS[part]
+        options = [h for h in (hour % 12, hour % 12 + 12) if low <= h <= high]
+        return options or [hour]
+    return [hour % 12, hour % 12 + 12] if 1 <= hour <= 12 else [hour]
+
+
+def parse_when(when="", minutes=None, part=""):
+    """'09:00' / '9:00' / '9' → the first time it's that time from now (9 → 09:00 or 21:00, whichever comes first),
+    '2026-10-17 09:00' → that day (09:00 or 21:00 when the morning is already past), or minutes from now → a moment."""
     if minutes not in (None, ""):
         return time.time() + float(minutes) * 60
-    when = (when or "").strip().replace("T", " ")
+    when = (when or "").strip().replace("T", " ").replace(".", ":")
+    now = datetime.now()
+    day = None
     for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%d-%m-%Y %H:%M"):
         try:
-            return datetime.strptime(when, fmt).timestamp()
+            t = datetime.strptime(when, fmt)
+            day = t.date()
+            break
         except ValueError:
             pass
-    try:
-        t = datetime.strptime(when, "%H:%M")
-        at = datetime.now().replace(hour=t.hour, minute=t.minute, second=0, microsecond=0)
-        return (at if at.timestamp() > time.time() + 30 else at + timedelta(days=1)).timestamp()
-    except ValueError:
-        raise ValueError(f"Unclear time: {when!r} (use YYYY-MM-DD HH:MM, HH:MM or minutes)")
+    else:
+        try:
+            t = datetime.strptime(when if ":" in when else f"{when}:00", "%H:%M")
+        except ValueError:
+            raise ValueError(f"Unclear time: {when!r} (use HH:MM, YYYY-MM-DD HH:MM or minutes)")
+    soonest = now.timestamp() + 30
+    days = [day] if day and day > now.date() else [now.date(), now.date() + timedelta(days=1), now.date() + timedelta(days=2)]
+    options = sorted(datetime.combine(d, datetime.min.time()).replace(hour=h, minute=t.minute).timestamp()
+                     for d in days for h in _hours(t.hour, part))
+    return next(o for o in options if o > soonest)  # (always one: the hours repeat every day)
 
 
-def reminder(text, when="", minutes=None, repeat="none"):
-    item = _add("reminder", parse_when(when, minutes), text, repeat)
+def _same(kind, at):
+    """One of [kind] at that minute already (the AI sometimes sets the same thing twice)."""
+    return next((i for i in _items() if i["kind"] == kind and abs(i["at"] - at) < 60), None)
+
+
+def reminder(text, when="", minutes=None, repeat="none", part=""):
+    at = parse_when(when, minutes, part)
+    if _same("reminder", at):
+        return f"(already set) reminder at {_moment(at)}. Done: don't set it again."
+    item = _add("reminder", at, text, repeat)
     return f"reminder '{text}' at {_moment(item['at'])}" + (f", {repeat}" if repeat != "none" else "")
 
 
 # --- Alarms ---
 
-def alarm(when, repeat="none", label=""):
-    item = _add("alarm", parse_when(when), label, repeat)
-    return f"alarm at {_moment(item['at'])}" + (f", {repeat}" if repeat != "none" else "") + (f" ({label})" if label else "")
+def alarm(when, repeat="none", label="", part=""):
+    at = parse_when(when, part=part)
+    if _same("alarm", at):
+        return f"(already set) alarm at {_moment(at)}. Done: don't set it again."
+    item = _add("alarm", at, label, repeat)
+    return f"alarm set at {_moment(item['at'])}" + (f", {repeat}" if repeat != "none" else "") + (f" ({label})" if label else "")
 
 
 def _ring(item):

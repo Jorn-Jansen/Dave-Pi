@@ -67,7 +67,7 @@ In de terminal: `sudo dave thermostaat`, `sudo dave thermostaat 20.5`, `sudo dav
   `sudo dave config alarm_lights false` om het uit te zetten).
 - *"Start de stopwatch"*, *"ronde"*, *"pauze"*, *"ga verder"*, *"stop de stopwatch"*
 
-Alles blijft bewaard, ook na een herstart. In de terminal: `sudo dave timers`, `sudo dave alarm stop`, `sudo dave stopwatch`.
+Alles blijft bewaard, ook na een herstart. In de terminal: `sudo dave timers`, `sudo dave alarm`, `sudo dave alarm 7:30`, `sudo dave alarm remove 7:30`, `sudo dave alarm stop`, `sudo dave stopwatch`.
 
 ## Wasmachine en droger
 
