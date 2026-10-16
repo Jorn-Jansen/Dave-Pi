@@ -56,7 +56,7 @@ def check():
     """One look at the washers and dryers; says what changed. Returns how many seconds until the next look."""
     if not (config.get("smartthings_token") or config.get("smartthings_refresh")):
         return 300
-    wait = 60
+    running = []  # how long each running machine can wait until its next look
     for device, kind in _machines():
         main = (smartthings._call("GET", f"/devices/{device['id']}/status") or {}).get("components", {}).get("main", {})
         state = _value(main, f"{kind}OperatingState", "machineState")
@@ -68,7 +68,12 @@ def check():
         finished = job in ("finish", "finished")
         if state == "run" and not finished:
             _done.discard(device["id"])  # (a new program: it may say "done" again at the end)
-            wait = min(wait, 5 if isinstance(remaining, (int, float)) and remaining <= 2 else 10)
+            # It says how long it still takes: wait until just before the end (at most 5 minutes at a time, in case it's paused
+            # or the program changes), then look every 5 seconds
+            if isinstance(remaining, (int, float)) and remaining > 2:
+                running.append(max(10, min(300, (remaining - 2) * 60)))
+            else:
+                running.append(5 if isinstance(remaining, (int, float)) else 10)
         if device["id"] in _done:
             continue
         # Some report "finish" as the job while the machine still says "run" for a moment: that's done too
@@ -87,7 +92,7 @@ def check():
             _done.add(device["id"])
             _tell(config.say(f"The {name} is done.", f"De {name} is klaar.") if job in (None, "none", "finish", "finished", "cooling", "wrinklePrevent")
                   else config.say(f"The {name} stopped ({job}).", f"De {name} is gestopt ({job})."))
-    return wait
+    return min(running) if running else 60  # (nothing running: once a minute)
 
 
 def _tell(message):
