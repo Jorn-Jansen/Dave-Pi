@@ -192,9 +192,10 @@ def _run(name, args):
         if name == "alarm":
             action = args.get("action")
             if action == "set":
+                again = bool(_alarms_now)
                 text, ids = timers.alarm(args.get("when", ""), args.get("repeat") or "none", args.get("label", ""), _part(args), _alarms_now)
                 _alarms_now[:] = ids
-                return text
+                return ("(replaced the alarm you set a moment ago) " if again else "") + text
             if action == "stop":
                 return timers.stop_alarm()
             if action == "snooze":

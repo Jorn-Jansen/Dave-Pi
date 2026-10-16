@@ -173,8 +173,10 @@ def alarm(when, repeat="none", label="", part="", replace=()):
             continue
         item = _add("alarm", at, label, repeat)
         ids.append(item["id"])
+        just_past = at - time.time() > 86400 - 600  # (that time today was only just now: easy to wonder why it's tomorrow)
         said.append(f"alarm set: {_moment(at)}, in {duration(round((at - time.time()) / 60) * 60)}" + (f", {repeat}" if repeat != "none" else "")
-                    + (f" ({label})" if label else ""))
+                    + (f" ({label})" if label else "")
+                    + (" (that time today has just passed, so it's tomorrow: this is right, tell the user why)" if just_past else ""))
     return "; ".join(said) + ". Done: tell the user this time.", ids
 
 
