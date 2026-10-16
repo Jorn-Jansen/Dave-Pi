@@ -52,6 +52,23 @@ de tv verschijnt. Zet op de tv ook *inschakelen via netwerk* aan. Daarna: *"hey 
 Meerdere tv's (ook een Chromecast met Google TV): geef ze elk een naam bij `sudo dave tv setup` (*"zet Netflix op de slaapkamer-tv"*), en kies
 met `sudo dave tv default <naam>` welke hij pakt als je geen naam noemt. `sudo dave tv list` laat ze zien (⭐ = standaard).
 
+## Timers, herinneringen, wekker en stopwatch
+
+- *"Zet een timer van 10 minuten voor de pizza"*, *"hoe lang duurt mijn timer nog?"*
+- *"Herinner me morgen om 9 uur aan de vuilnis"*, *"elke werkdag om 8 uur: pillen"*
+- *"Maak me om 7 uur wakker"*, *"zet een wekker om 6:30 op werkdagen"*. Hij gaat af tot je *"hey Dave, stop"* of *"snooze"* zegt;
+  in de 10 minuten ervoor worden je Hue-lampen langzaam feller (`sudo dave config alarm_room slaapkamer` voor één kamer,
+  `sudo dave config alarm_lights false` om het uit te zetten).
+- *"Start de stopwatch"*, *"ronde"*, *"pauze"*, *"ga verder"*, *"stop de stopwatch"*
+
+Alles blijft bewaard, ook na een herstart. In de terminal: `sudo dave timers`, `sudo dave alarm stop`, `sudo dave stopwatch`.
+
+## Wasmachine en droger
+
+Dave zegt vanzelf als de wasmachine of droger **bijna klaar** is (nog 5 minuten) en als hij **klaar** is. Ook op je telefoon:
+installeer de gratis app **ntfy**, abonneer op een kanaal (bv. dezelfde als Dave op je PC gebruikt) en doe `sudo dave phone <kanaal>`.
+Uitzetten: `sudo dave config appliance_alerts false`.
+
 ## Altijd aan
 
 ```bash

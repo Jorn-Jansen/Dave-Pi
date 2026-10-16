@@ -16,6 +16,10 @@
   sudo dave tv app netflix | apps | add-app "Ziggo GO" com.ziggo.tv
   sudo dave test-speaker | test-mic    check the sound
   sudo dave memory [list] | add "…" | remove <nr or words> | clear   what Dave remembers for good
+  sudo dave timers                     timers, reminders and alarms (sudo dave timers cancel <woorden>)
+  sudo dave alarm stop | snooze        stop the alarm that's going off
+  sudo dave stopwatch [start|lap|pause|resume|stop|reset]
+  sudo dave phone <ntfy-kanaal>        announcements (washer done, reminders) to your phone too
   sudo dave status                     what's set up, and the service
   sudo dave update                     get the newest Dave from GitHub and install it
   sudo dave config [key] [value]       see or change one setting
@@ -28,7 +32,7 @@ import sys
 import threading
 import time
 
-from . import brain, config, groq, hue, listen, smartthings, timers, tv, voice
+from . import appliances, brain, config, groq, hue, listen, smartthings, stopwatch, timers, tv, voice
 
 
 def main(argv=None):
@@ -38,7 +42,8 @@ def main(argv=None):
         return 0
     command, rest = args[0], args[1:]
     handlers = {"run": run, "ask": ask, "chat": chat, "say": say, "setup": setup, "hue": hue_command, "smartthings": smartthings_command, "tv": tv_command,
-                "update": update, "voice": voice_command, "memory": memory_command, "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command}
+                "update": update, "voice": voice_command, "memory": memory_command, "timers": timers_command, "alarm": alarm_command,
+                "stopwatch": stopwatch_command, "phone": phone_command, "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command}
     if command not in handlers:
         print(f"Onbekend commando: {command}\n{__doc__}")
         return 1
@@ -59,9 +64,53 @@ def main(argv=None):
 
 # --- The speaker ---
 
+def _announcements(speak=True):
+    """What happens when a timer, reminder or alarm is due, before an alarm (the lights), and when the washer or dryer is done."""
+    def say(text):
+        print(f"⏰ {text}", flush=True)
+        if speak:
+            voice.speak(text)
+
+    def due(kind, text, item):
+        if speak:
+            voice.tone("alarm")
+        if kind == "timer":
+            what = text or timers.duration(item["at"] - item.get("made", item["at"]))
+            say(config.say(f"Your timer is done: {what}.", f"Je timer is klaar: {what}."))
+        else:
+            say(config.say(f"Reminder: {text}", f"Herinnering: {text}"))
+            appliances.phone("⏰ " + config.get("name"), text)
+
+    def ring(item, round):
+        if speak:
+            voice.tone("alarm")
+        if round == 0:
+            now = time.strftime("%H:%M")
+            say(config.say(f"Good morning! It's {now}.", f"Goedemorgen! Het is {now}.") + (f" {item['text']}." if item.get("text") else ""))
+        elif round % 2 == 0:
+            say(config.say(f"Time to get up. Say: hey {config.get('name')}, stop.", f"Tijd om op te staan. Zeg: hey {config.get('name')}, stop."))
+
+    def sunrise(item, level):
+        if not config.get("hue_user"):
+            return
+        try:
+            hue.set_lights(config.get("alarm_room") or "", brightness=max(1, int(level * 100)), color="warm")
+        except Exception as e:
+            print(f"(alarm lights: {e})", flush=True)
+
+    timers.on_due, timers.on_ring, timers.on_sunrise = due, ring, sunrise
+    appliances.on_news = say
+
+
+def _service_running():
+    return subprocess.run(["systemctl", "is-active", "--quiet", "dave"]).returncode == 0
+
+
 def run(_):
     """Always listening for the wake phrase, then: listen, think, answer. What the service runs."""
-    timers.on_done = lambda message: (voice.tone("alarm"), voice.speak(message))
+    _announcements()
+    timers.start()
+    appliances.start()
     phrase = config.get("wake_phrase") or f"hey {config.get('name').lower()}"
     print(f"{config.get('name')} op de Pi draait. Luistert naar \"{phrase}\".", flush=True)
     if not config.get("groq_key"):
@@ -118,17 +167,23 @@ def ask(rest):
     if not text:
         print('Gebruik: sudo dave ask "zet de woonkamer op paars" (--quiet: niet uitspreken)')
         return 1
-    timers.on_done = lambda message: (print(f"⏰ {message}"), None if quiet else voice.speak(message))
+    service = _service_running()
+    if not service:  # (when the service runs, it announces timers and reminders itself)
+        _announcements(speak=not quiet)
+        timers.start()
     answer = brain.ask(text, on_action=lambda n, a, r: print(f"  ({n}) {r}"))
     print(f"{config.get('name')}: {answer}")
     if not quiet:
         voice.speak(answer)
-    _wait_for_timers()
+    if not service:
+        _wait_for_timers()
 
 
 def chat(_):
     print(f"Typ je vraag aan {config.get('name')} (Ctrl+C om te stoppen; begin met '-' om het antwoord niet uit te spreken).")
-    timers.on_done = lambda message: (print(f"\n⏰ {message}"), voice.speak(message))
+    if not _service_running():
+        _announcements()
+        timers.start()
     while True:
         try:
             text = input("jij: ").strip()
@@ -145,12 +200,10 @@ def chat(_):
 
 def _wait_for_timers():
     """`dave ask "timer van 10 seconden"`: wait for short timers so you can hear them go off."""
-    from . import timers as t
-    with t._lock:
-        soon = [x["at"] for x in t._timers.values() if x["at"] - time.time() < 120]
+    soon = timers.soon(120)
     if soon:
-        print(f"(wacht {round(max(soon) - time.time())} s op de timer…)")
-        time.sleep(max(0, max(soon) - time.time()) + 4)
+        print(f"(wacht {round(soon - time.time())} s op de timer…)")
+        time.sleep(max(0, soon - time.time()) + 4)
 
 
 def say(rest):
@@ -298,6 +351,36 @@ def config_command(rest):
         print(f"{rest[0]} = {config.shown(rest[0], config.get(rest[0]))}")
 
 
+def timers_command(rest):
+    if rest and rest[0] == "cancel":
+        print(f"{timers.cancel('', ' '.join(rest[1:]))} geannuleerd.")
+    else:
+        print(timers.describe().replace("; ", "\n"))
+
+
+def alarm_command(rest):
+    sub = rest[0] if rest else ""
+    if sub == "stop":
+        print(timers.stop_alarm())
+    elif sub == "snooze":
+        print(timers.snooze(float(rest[1]) if len(rest) > 1 else 9))
+    else:
+        print(timers.describe("alarm"))
+
+
+def stopwatch_command(rest):
+    print(stopwatch.run(rest[0] if rest else "check"))
+
+
+def phone_command(rest):
+    if not rest:
+        print(f"Kanaal: {config.get('phone_topic') or '(geen)'}. Instellen: sudo dave phone <kanaal>  (de gratis ntfy-app: abonneer op dat kanaal)")
+        return
+    config.set("phone_topic", rest[0])
+    appliances.phone(config.get("name"), config.say("Notifications from your Pi are on.", "Meldingen van je Pi staan aan."))
+    print(f"✅ Meldingen gaan nu ook naar ntfy-kanaal {rest[0]} (er is een testmelding gestuurd).")
+
+
 def memory_command(rest):
     sub = (rest[0] if rest else "list").lower()
     memories = list(config.get("memories") or [])
@@ -409,7 +492,8 @@ def status(_):
     print(f"Hue: {'✅ ' + config.get('hue_bridge') if config.get('hue_user') else '❌ (sudo dave hue setup)'}")
     st = "OAuth" if config.get("smartthings_refresh") else "token" if config.get("smartthings_token") else ""
     print(f"SmartThings: {'✅ ' + st if st else '❌ (sudo dave smartthings token …)'}")
-    print(f"Geheugen: {len(config.get('memories') or [])} dingen (sudo dave memory)")
+    print(f"Geheugen: {len(config.get('memories') or [])} dingen (sudo dave memory) · gepland: {timers.describe()}")
+    print(f"Was/droger-meldingen: {'aan' if config.get('appliance_alerts') else 'uit'} · telefoon: {config.get('phone_topic') or '(geen, sudo dave phone <kanaal>)'}")
     tvs = tv.all_tvs()
     print(f"TV's: " + (", ".join(f"{'⭐' if n == tv.default() else ''}{n} ({i.get('model') or i.get('host')})" for n, i in tvs.items()) if tvs else "❌ (sudo dave tv setup)"))
     print(f"Wekwoord: \"{config.get('wake_phrase')}\" · model {'✅' if os.path.isdir(listen.MODEL) else '❌ ' + listen.MODEL}")

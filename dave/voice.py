@@ -18,6 +18,7 @@ from . import config, web
 
 _playing = None
 _lock = threading.Lock()
+_speaking = threading.Lock()  # one thing at a time (a timer going off while answering waits its turn)
 
 _LINK = re.compile(r"\b(?:https?://|www\.)[^\s<>\"']+", re.I)
 _EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿️‍⃣]")
@@ -94,6 +95,11 @@ def speak(text):
     text = _speakable(text)
     if not text:
         return
+    with _speaking:
+        _speak(text)
+
+
+def _speak(text):
     wav = None
     kind = engine()
     try:

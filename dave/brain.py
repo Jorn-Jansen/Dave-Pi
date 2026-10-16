@@ -9,7 +9,7 @@ import re
 import subprocess
 import time
 
-from . import config, groq, hue, smartthings, timers, tv
+from . import config, groq, hue, smartthings, stopwatch, timers, tv
 
 PERSONALITIES = {
     "normal": "",
@@ -62,6 +62,23 @@ TOOLS = [
           {"action": {"type": "string", "enum": ["set", "list", "cancel"]},
            "seconds": {"type": "number", "description": "For set: how long, in seconds"},
            "label": _s("What it's for (short), or which to cancel (empty = all)")}, ["action"]),
+    _tool("reminder", "Reminders: 'remind me tomorrow at 9 to put the bins out', 'remind me in 20 minutes to call grandma', 'every weekday at 8 "
+          "take my pills' (set), 'what reminders do I have?' (list), or cancel one.",
+          {"action": {"type": "string", "enum": ["set", "list", "cancel"]},
+           "text": _s("For set: what to remind of, short, in the user's language; for cancel: words from it (empty = all)"),
+           "when": _s("For set: when, as YYYY-MM-DD HH:MM (local time), or HH:MM for today / tomorrow"),
+           "minutes": {"type": "number", "description": "For set: in how many minutes (instead of when)"},
+           "repeat": {"type": "string", "enum": ["none", "daily", "weekdays", "weekend", "weekly"]}}, ["action"]),
+    _tool("alarm", "The alarm clock: 'wake me up at 7' / 'zet een wekker om 7 uur' (set, when = 07:00), 'every weekday at 6:30' (repeat weekdays), "
+          "list, cancel, and while it's going off: 'stop' (stop) or 'snooze' / 'nog 10 minuten' (snooze).",
+          {"action": {"type": "string", "enum": ["set", "list", "cancel", "stop", "snooze"]},
+           "when": _s("For set: HH:MM, or YYYY-MM-DD HH:MM"),
+           "repeat": {"type": "string", "enum": ["none", "daily", "weekdays", "weekend"]},
+           "label": _s("For set: what it's for (optional); for cancel: words from it or its time (empty = all)"),
+           "minutes": {"type": "number", "description": "For snooze: how long (default 9)"}}, ["action"]),
+    _tool("stopwatch", "The stopwatch (counting up, not a timer): start, lap ('ronde'), check ('how long has it been?'), pause, resume "
+          "('carry on'), stop (says the total and laps), reset.",
+          {"action": {"type": "string", "enum": ["start", "lap", "check", "pause", "resume", "stop", "reset"]}}, ["action"]),
     _tool("volume", "This speaker's volume: louder, quieter or a level ('volume to 40%').",
           {"level": {"type": "integer", "description": "0-100"}, "change": {"type": "string", "enum": ["up", "down"]}}),
     _tool("remember", "Remember something for good when the user asks ('onthoud dat…', 'remember that…') or tells you something about "
@@ -91,9 +108,9 @@ def _system():
     language = "Dutch" if config.dutch() else "English"
     personality = PERSONALITIES.get(config.get("personality"), "")
     return (f"{personality}\n\nYou are {name}, a voice assistant on a smart speaker in the user's home (a Raspberry Pi), like a Google Home. "
-            f"Answer in {language} unless the user speaks another language. Your answers are spoken: one or two short sentences, plain speech, "
-            "no lists, no markdown, no emoji, no links. Use your commands for the lights (Hue), the TV, Samsung devices (SmartThings), timers and "
-            "the volume; when the user asks for several things at once, do all of them. Look things up on the web for news, weather and facts. "
+            f"Always answer in {language} (also short confirmations), unless the user speaks another language. Your answers are spoken: one or two short sentences, plain speech, "
+            "no lists, no markdown, no emoji, no links. Use your commands for the lights (Hue), the TV, Samsung devices (SmartThings), timers, reminders, "
+            "alarms, the stopwatch and the volume; when the user asks for several things at once, do all of them. Look things up on the web for news, weather and facts. "
             f"It's {time.strftime('%A %d %B %Y, %H:%M')} now. Only end with a question when you really need an answer (then the speaker keeps " +
             "listening); never add filler questions like 'Anything else?' or 'Is er verder nog iets?', just stop after the answer."
             + _memories()).strip()
@@ -129,10 +146,30 @@ def _run(name, args):
         if name == "timer":
             action = args.get("action")
             if action == "set":
-                return timers.add(float(args.get("seconds") or 60), args.get("label", ""))
+                return timers.timer(float(args.get("seconds") or 60), args.get("label", ""))
             if action == "cancel":
-                return f"cancelled {timers.cancel(args.get('label', ''))} timer(s)"
-            return timers.describe()
+                return timers.cancel("timer", args.get("label", ""))
+            return timers.describe("timer")
+        if name == "reminder":
+            action = args.get("action")
+            if action == "set":
+                return timers.reminder(args.get("text", ""), args.get("when", ""), args.get("minutes"), args.get("repeat") or "none")
+            if action == "cancel":
+                return timers.cancel("reminder", args.get("text") or args.get("when") or "")
+            return timers.describe("reminder")
+        if name == "alarm":
+            action = args.get("action")
+            if action == "set":
+                return timers.alarm(args.get("when", ""), args.get("repeat") or "none", args.get("label", ""))
+            if action == "stop":
+                return timers.stop_alarm()
+            if action == "snooze":
+                return timers.snooze(args.get("minutes") or 9)
+            if action == "cancel":
+                return timers.cancel("alarm", args.get("label") or args.get("when") or "")  # (the AI sometimes gives the time as when)
+            return timers.describe("alarm")
+        if name == "stopwatch":
+            return stopwatch.run(args.get("action", "check"))
         if name == "volume":
             return set_volume(args.get("level"), args.get("change"))
         if name == "remember":
@@ -201,6 +238,18 @@ def ask(text, on_action=None):
     if time.time() - _last > 600:  # follow-up questions work for 10 minutes
         _history = []
     _last = time.time()
+    # The alarm going off: "stop" / "snooze" straight away, without asking the AI
+    if timers.ringing():
+        words = text.lower().strip(" .!?")
+        snooze = re.search(r"snooze|sluimer|nog (\d+ )?(minuut|minuten|even|tien|vijf)|later|5 minuten|10 minuten", words)
+        if snooze:
+            n = re.search(r"(\d+)", words)
+            minutes = float(n.group(1)) if n else 9
+            timers.snooze(minutes)
+            return config.say(f"Okay, {int(minutes)} more minutes.", f"Oké, nog {int(minutes)} minuten.")
+        if re.search(r"^(stop|uit|ok[eé]?|ja|klaar|ik ben wakker|i'?m up|alarm uit|wekker uit|stop (het|de) (alarm|wekker))\b", words):
+            timers.stop_alarm()
+            return config.say("Alarm off. Good morning!", "Wekker uit. Goedemorgen!")
     messages = [{"role": "system", "content": _system()}] + _history + [{"role": "user", "content": text}]
     for _ in range(5):  # commands, then the answer about them
         message = groq.chat(messages, _tools())
