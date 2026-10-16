@@ -58,10 +58,11 @@ def chat(messages, tools=None, search=True):
         if status == 429:
             wait = _wait(text)
             daily = "per day" in text
-            if wait is not None and wait < 20 and not daily:
+            if wait is not None and wait <= 65 and not daily:  # the per-minute limit (8,000 tokens a minute on the free tier): just wait
+                print(f"(Groq: per-minute limit, waiting {wait:.0f} s)", flush=True)
                 time.sleep(wait + 0.5)
                 continue
-            if body["model"] == MODEL:  # the day's allowance is used up: the smaller model for a while
+            if daily and body["model"] == MODEL:  # the day's allowance is used up: the smaller model for a while
                 _fallback_until = time.time() + 3600
                 continue
             print(f"(Groq: {(data or {}).get('error', {}).get('message', text)[:300]})", flush=True)
@@ -70,6 +71,9 @@ def chat(messages, tools=None, search=True):
                 raise GroqError(config.say(f"I've used up today's free AI allowance. In about {minutes} minutes I can do a bit again.",
                                            f"Mijn gratis AI-tegoed voor vandaag is op. Over zo'n {minutes} minuten kan ik weer wat."))
             raise GroqError(config.say(f"I'm asking the AI too fast. Try again in {minutes} minutes.", f"Ik vraag de AI te snel. Probeer het over {minutes} minuten nog eens."))
+        if status == 413:  # one question bigger than the per-minute allowance (a long web search, a long conversation)
+            print(f"(Groq: {(data or {}).get('error', {}).get('message', text)[:300]})", flush=True)
+            raise GroqError(config.say("That got too long for the free AI. Try asking it shorter.", "Dat werd te lang voor de gratis AI. Vraag het eens korter."))
         if status == 401:
             raise GroqError(config.say("My Groq key doesn't work. Check it with: sudo dave setup", "Mijn Groq-sleutel werkt niet. Check hem met: sudo dave setup"))
         if attempt < 3 and status >= 500:
