@@ -341,9 +341,24 @@ def tv_command(rest):
 
 
 def config_command(rest):
+    if rest and rest[0] in ("remove", "delete", "verwijder") and len(rest) == 2:
+        if rest[1] in config.DEFAULTS:
+            print(f"{rest[1]} is een echte instelling; zet hem anders: sudo dave config {rest[1]} <waarde>")
+            return 1
+        config.load().pop(rest[1], None)
+        config.save()
+        print(f"{rest[1]} verwijderd.")
+        return
+    if rest and rest[0] not in config.DEFAULTS:  # (a typo would otherwise be saved as a new setting that nothing uses)
+        import difflib
+        close = difflib.get_close_matches(rest[0], list(config.DEFAULTS), n=1, cutoff=0.5)
+        print(f"⚠ Onbekende instelling: {rest[0]}." + (f" Bedoel je {close[0]}?  sudo dave config {close[0]} …" if close else "")
+              + "  Alle instellingen: sudo dave config")
+        return 1
     if not rest:
         for key, value in config.load().items():
-            print(f"{key} = {config.shown(key, value)}")
+            stray = "   ← onbekend, weghalen: sudo dave config remove " + key if key not in config.DEFAULTS else ""
+            print(f"{key} = {config.shown(key, value) if key in config.DEFAULTS else '…'}{stray}")
     elif len(rest) == 1:
         print(config.shown(rest[0], config.get(rest[0])))
     else:
