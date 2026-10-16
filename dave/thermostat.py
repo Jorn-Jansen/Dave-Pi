@@ -1,7 +1,9 @@
 """
-The ATAG thermostat (ATAG One): how warm it is, set the temperature, the program (automatic / manual / …), whether the
-boiler is burning, the hot water. Over your own Wi-Fi (its local API on port 10000, like Home Assistant's ATAG
-integration), no internet needed. Paired once: sudo dave thermostaat setup, then you confirm it on the thermostat's screen.
+The ATAG thermostat: how warm it is, set the temperature, the program (automatic / manual / …). Over your own Wi-Fi, no
+internet needed, in one of two ways (sudo dave thermostaat setup picks the right one):
+- The ATAG One Zone (the ATAG Zone app): through HomeKit (homekit.py), paired once with its 8-digit HomeKit code.
+- The older ATAG One: its own local API on port 10000 (like Home Assistant's ATAG integration), also whether the boiler is
+  burning and the hot water; paired once, then you confirm it on the thermostat's screen.
 """
 
 import json
@@ -11,7 +13,7 @@ import uuid
 import urllib.error
 import urllib.request
 
-from . import config
+from . import config, homekit
 
 PORT = 10000
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; AtagOneAPI/x; http://atag.one/)", "X-OneApp-Version": "dave-pi", "Content-Type": "application/json"}
@@ -117,7 +119,25 @@ def _update(control, configuration=None):
         raise ThermostatError(config.say("The thermostat didn't accept that.", "De thermostaat nam dat niet aan."))
 
 
+def _homekit():
+    return config.get("thermostat_kind") == "homekit"
+
+
+def _hk(work):
+    try:
+        return work()
+    except homekit.HomeKitError as e:
+        raise ThermostatError(str(e)) from e
+
+
 def status():
+    if _homekit():
+        v = _hk(homekit.read)
+        mode = {"auto": config.say("schedule", "klokprogramma"), "heat": config.say("manual", "handmatig"), "off": config.say("off", "uit")}.get(v["mode"], v["mode"])
+        return ", ".join([config.say(f"inside {v['room_temp']} °C", f"binnen {v['room_temp']} °C"),
+                          config.say(f"set to {v['target']} °C", f"ingesteld op {v['target']} °C"),
+                          config.say(f"program: {mode}", f"programma: {mode}")]
+                         + ([config.say("heating now", "de verwarming brandt nu")] if v["heating"] else []))
     v = read()
     boiler = int(v.get("boiler_status") or 0)
     mode = MODES.get(v.get("ch_mode"), str(v.get("ch_mode")))
@@ -137,6 +157,9 @@ def status():
 
 def set_temperature(target=None, change=None):
     """A temperature (4–27 °C), or warmer / colder by [change] degrees from what it's set to."""
+    if _homekit():
+        value = _hk(lambda: homekit.set_temperature(target, change))
+        return config.say(f"thermostat set to {value:g} °C", f"thermostaat op {value:g} °C gezet")
     if target is None:
         current = float(read().get("ch_mode_temp") or 20)
         target = current + float(change or 0)
@@ -150,6 +173,13 @@ def set_mode(mode):
     aliases = {"auto": "automatic", "automatisch": "automatic", "klokprogramma": "automatic", "programma": "automatic", "schedule": "automatic",
                "handmatig": "manual", "vakantie": "vacation", "away": "vacation", "weg": "vacation", "open haard": "fireplace", "haard": "fireplace"}
     want = aliases.get(want, want)
+    if _homekit():  # (HomeKit knows: the schedule, manual, off)
+        hk = {"automatic": "auto", "manual": "heat", "uit": "off", "off": "off"}.get(want)
+        if not hk:
+            raise ThermostatError(config.say(f"Through HomeKit the thermostat can go to the schedule, manual or off, not {mode}.",
+                                             f"Via HomeKit kan de thermostaat naar het klokprogramma, handmatig of uit, niet {mode}."))
+        _hk(lambda: homekit.set_mode(hk))
+        return config.say(f"program: {want}", f"programma: {DUTCH.get(want, 'uit')}")
     code = next((k for k, v in MODES.items() if v == want), None)
     if code is None:
         raise ThermostatError(config.say(f"Unknown program {mode}.", f"Onbekend programma {mode}."))

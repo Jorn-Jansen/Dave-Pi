@@ -117,7 +117,7 @@ def _tools():
     """The commands, with the TVs there are in the TV command's description (so the AI picks the right one by name). Commands for
     things that aren't set up are left out: every command is sent along with every question, and Groq's free tier counts it."""
     tvs = tv.all_tvs()
-    unused = {name for name, ready in (("hue", config.get("hue_user")), ("tv", tvs), ("thermostat", config.get("thermostat_host")),
+    unused = {name for name, ready in (("hue", config.get("hue_user")), ("tv", tvs), ("thermostat", config.get("thermostat_host") or config.get("thermostat_kind")),
                                        ("smartthings", config.get("smartthings_token") or config.get("smartthings_refresh"))) if not ready}
     tools = [t for t in json.loads(json.dumps(TOOLS)) if t["function"]["name"] not in unused]
     for t in tools:

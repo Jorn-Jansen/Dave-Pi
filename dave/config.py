@@ -40,6 +40,7 @@ DEFAULTS = {
     # The ATAG thermostat (sudo dave thermostaat setup)
     "thermostat_host": "",
     "thermostat_mac": "",
+    "thermostat_kind": "",          # "homekit" (ATAG One Zone) or "" (the older ATAG One's own connection)
     # Lists, shared with the phones (sudo dave lijst koppel)
     "lists": [],
     "lists_code": "",

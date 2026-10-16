@@ -54,7 +54,12 @@ met `sudo dave tv default <naam>` welke hij pakt als je geen naam noemt. `sudo d
 
 ## De verwarming (ATAG-thermostaat)
 
-`sudo dave thermostaat setup` — Dave zoekt de thermostaat op je netwerk; bevestig daarna het verzoek op het scherm van de thermostaat.
+`sudo dave thermostaat setup` — Dave zoekt de thermostaat op je netwerk.
+- **ATAG One Zone** (de ATAG Zone-app): via HomeKit, zonder cloud. Typ de HomeKit-code van 8 cijfers (sticker of menu van de thermostaat).
+  Staat hij al in de Woning-app van een iPhone, haal hem daar dan eerst weg: een HomeKit-apparaat heeft één eigenaar.
+  Weer loslaten: `sudo dave thermostaat ontkoppel`.
+- **Oudere ATAG One**: via zijn eigen koppeling; bevestig daarna het verzoek op het scherm van de thermostaat.
+
 Daarna: *"hoe warm is het binnen?"*, *"zet de verwarming op 21 graden"*, *"iets warmer"*, *"zet de verwarming terug op het klokprogramma"*.
 In de terminal: `sudo dave thermostaat`, `sudo dave thermostaat 20.5`, `sudo dave thermostaat auto`.
 

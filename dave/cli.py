@@ -16,7 +16,7 @@
   sudo dave tv app netflix | apps | add-app "Ziggo GO" com.ziggo.tv
   sudo dave test-speaker | test-mic    check the sound
   sudo dave memory [list] | add "…" | remove <nr or words> | clear   what Dave remembers for good
-  sudo dave thermostaat setup | status | 21 | auto   the ATAG thermostat
+  sudo dave thermostaat setup | status | 21 | auto | ontkoppel   the ATAG thermostat (HomeKit or its own connection)
   sudo dave timers                     timers, reminders and alarms (sudo dave timers cancel <woorden>)
   sudo dave alarm [7:30 | remove [tijd] | stop | snooze]   alarms: list, set, remove, stop
   sudo dave lijst [naam] | koppel [nieuw] | maak <naam> | weg <naam>   the lists (shared with Dave on your iPhone)
@@ -36,7 +36,7 @@ import sys
 import threading
 import time
 
-from . import appliances, brain, config, groq, hue, listen, lists, log, smartthings, stopwatch, thermostat, timers, tv, voice
+from . import appliances, brain, config, groq, homekit, hue, listen, lists, log, smartthings, stopwatch, thermostat, timers, tv, voice
 
 
 def main(argv=None):
@@ -62,7 +62,7 @@ def main(argv=None):
     except KeyboardInterrupt:
         print()
         return 130
-    except (groq.GroqError, hue.HueError, smartthings.SmartThingsError, tv.TVError, thermostat.ThermostatError, lists.ListError) as e:
+    except (groq.GroqError, hue.HueError, smartthings.SmartThingsError, tv.TVError, thermostat.ThermostatError, lists.ListError, homekit.HomeKitError) as e:
         print(f"⚠ {e}")
         return 1
     except OSError as e:  # no connection, a missing program…: a short line, not a wall of text
@@ -442,7 +442,21 @@ def config_command(rest):
 def thermostat_command(rest):
     sub = rest[0].lower() if rest else "status"
     if sub == "setup":
-        print("De thermostaat zoeken op je netwerk (hij meldt zich om de paar seconden; max. 25 s)…")
+        print("Zoeken naar een HomeKit-thermostaat (ATAG One Zone, de ATAG Zone-app)…")
+        found = None
+        try:
+            found = homekit.find_thermostat()
+        except homekit.HomeKitError as e:
+            print(f"(HomeKit: {e})")
+        if found:
+            print(f"Gevonden: {found['name']} ({found['model']}) op {found['address']}.")
+            code = input("HomeKit-code (8 cijfers, op de sticker of in het menu van de thermostaat, bv. 123-45-678): ").strip()
+            homekit.pair(found["id"], code)
+            print("✅ Gekoppeld via HomeKit.")
+            print(thermostat.status())
+            return
+        print("Geen vrije HomeKit-thermostaat gevonden. (Staat hij al in de Woning-app van een iPhone? Haal hem daar eerst weg.)")
+        print("Dan de oudere ATAG One proberen: de thermostaat zoeken op je netwerk (hij meldt zich om de paar seconden; max. 25 s)…")
         host = thermostat.discover()
         typed = input(f"IP-adres van de thermostaat [{host or 'niet gevonden, typ hem (staat in je router)'}]: ").strip()
         host = typed or host
@@ -454,6 +468,11 @@ def thermostat_command(rest):
         print(thermostat.status())
     elif sub == "status":
         print(thermostat.status())
+    elif sub in ("ontkoppel", "unpair"):
+        if config.get("thermostat_kind") == "homekit":
+            homekit.unpair()
+        config.set("thermostat_host", "")
+        print("Dave is de thermostaat losgelaten (hij kan nu weer in de Woning-app of elders gekoppeld worden).")
     elif sub.replace(",", ".").replace(".", "", 1).isdigit():
         print(thermostat.set_temperature(float(sub.replace(",", "."))))
     elif sub in ("warmer", "hoger"):
@@ -612,7 +631,7 @@ def status(_):
     print(f"Geheugen: {len(config.get('memories') or [])} dingen (sudo dave memory) · gepland: {timers.describe()}")
     print(f"Was/droger-meldingen: {'aan' if config.get('appliance_alerts') else 'uit'} · telefoon: {config.get('phone_topic') or '(geen, sudo dave phone <kanaal>)'}")
     print(f"Lijsten: {len(lists.visible())} · gedeeld met telefoons via de huiscode (sudo dave lijst koppel)")
-    print(f"Thermostaat: {'✅ ' + config.get('thermostat_host') if config.get('thermostat_host') else '❌ (sudo dave thermostaat setup)'}")
+    print(f"Thermostaat: {'✅ HomeKit' if config.get('thermostat_kind') == 'homekit' else '✅ ' + config.get('thermostat_host') if config.get('thermostat_host') else '❌ (sudo dave thermostaat setup)'}")
     tvs = tv.all_tvs()
     print(f"TV's: " + (", ".join(f"{'⭐' if n == tv.default() else ''}{n} ({i.get('model') or i.get('host')})" for n, i in tvs.items()) if tvs else "❌ (sudo dave tv setup)"))
     print(f"Wekwoord: \"{config.get('wake_phrase')}\" · model {'✅' if os.path.isdir(listen.MODEL) else '❌ ' + listen.MODEL}")
