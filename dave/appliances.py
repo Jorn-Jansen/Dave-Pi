@@ -8,7 +8,7 @@ check is one small web request: next to nothing for the Pi).
 import threading
 import time
 
-from . import config, smartthings, web
+from . import config, log, smartthings, web
 
 on_news = None  # (message): something to say (set by the main loop)
 _last = {}      # device id → its last (state, job)
@@ -97,6 +97,7 @@ def check():
 
 def _tell(message):
     print(f"🧺 {message}", flush=True)
+    log.write(f"zegt: {message}", "wasmachine/droger")
     if on_news:
         on_news(message)
     phone(config.get("name"), message)

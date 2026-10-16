@@ -9,7 +9,7 @@ import re
 import subprocess
 import time
 
-from . import config, groq, hue, smartthings, stopwatch, thermostat, timers, tv
+from . import config, groq, hue, log, smartthings, stopwatch, thermostat, timers, tv
 
 PERSONALITIES = {
     "normal": "",
@@ -271,6 +271,7 @@ def ask(text, on_action=None):
     global _history, _last, _said
     _said = text
     _alarms_now.clear()
+    log.write(f"vraag: {text!r}")
     if time.time() - _last > 600:  # follow-up questions work for 10 minutes
         _history = []
     _last = time.time()
@@ -292,6 +293,7 @@ def ask(text, on_action=None):
         calls = message.get("tool_calls") or []
         if not calls:
             answer = re.sub(r"\[\s*[a-zA-Z][a-zA-Z -]{1,20}?\s*\]\s*", "", (message.get("content") or "").strip())
+            log.write(f"antwoord: {answer!r}")
             _history = (_history + [{"role": "user", "content": text}, {"role": "assistant", "content": answer}])[-12:]
             return answer or config.say("Done.", "Klaar.")
         messages.append({"role": "assistant", "content": message.get("content") or "", "tool_calls": calls})
@@ -302,7 +304,9 @@ def ask(text, on_action=None):
             except ValueError:
                 args = {}
             result = _run(name, args)
+            log.write(f"doet: {name} {json.dumps(args, ensure_ascii=False)} → {str(result)[:300]}")
             if on_action:
                 on_action(name, args, result)
             messages.append({"role": "tool", "tool_call_id": call.get("id", name), "content": str(result)[:3000]})
+    log.write("gestopt: te veel stappen")
     return config.say("Sorry, that took too many steps.", "Sorry, dat werden te veel stappen.")

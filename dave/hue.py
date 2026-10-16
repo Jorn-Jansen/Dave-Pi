@@ -2,7 +2,7 @@
 
 import re
 
-from . import config, web
+from . import config, log, web
 
 COLORS = {
     # Dutch and English names → RGB
@@ -170,6 +170,7 @@ def set_lights(target="", on=None, brightness=None, color="", scene=""):
             raise HueError(config.say(f"I don't have a scene called {scene}. The scenes are: {known}.", f"Ik heb geen scène die {scene} heet. De scènes zijn: {known}."))
         sid, s = found[0]
         _call("PUT", "/groups/" + (s.get("group") or "0") + "/action", {"scene": sid})
+        log.write(f"Hue: scène {s.get('name')}")
         return config.say(f"Scene {s['name']} is on.", f"Scène {s['name']} staat aan.")
     state = {}
     if on is not None:
@@ -190,4 +191,5 @@ def set_lights(target="", on=None, brightness=None, color="", scene=""):
     for kind, i, name in _targets(target):
         _call("PUT", f"/groups/{i}/action" if kind == "group" else f"/lights/{i}/state", state)
         names.append(name)
+    log.write(f"Hue: {', '.join(names)} → {state}")
     return ", ".join(names) + ": " + ", ".join(f"{k}={v}" for k, v in state.items())

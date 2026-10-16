@@ -62,9 +62,7 @@ In de terminal: `sudo dave thermostaat`, `sudo dave thermostaat 20.5`, `sudo dav
 
 - *"Zet een timer van 10 minuten voor de pizza"*, *"hoe lang duurt mijn timer nog?"*
 - *"Herinner me morgen om 9 uur aan de vuilnis"*, *"elke werkdag om 8 uur: pillen"*
-- *"Maak me om 7 uur wakker"*, *"zet een wekker om 6:30 op werkdagen"*. Hij gaat af tot je *"hey Dave, stop"* of *"snooze"* zegt;
-  in de 10 minuten ervoor worden je Hue-lampen langzaam feller (`sudo dave config alarm_room slaapkamer` voor één kamer,
-  `sudo dave config alarm_lights false` om het uit te zetten).
+- *"Maak me om 7 uur wakker"*, *"zet een wekker om 6:30 op werkdagen"*. Hij gaat af tot je *"hey Dave, stop"* of *"snooze"* zegt.
 - *"Start de stopwatch"*, *"ronde"*, *"pauze"*, *"ga verder"*, *"stop de stopwatch"*
 
 Alles blijft bewaard, ook na een herstart. In de terminal: `sudo dave timers`, `sudo dave alarm`, `sudo dave alarm 7:30`, `sudo dave alarm remove 7:30`, `sudo dave alarm stop`, `sudo dave stopwatch`.
@@ -79,6 +77,7 @@ Uitzetten: `sudo dave config appliance_alerts false`.
 
 ```bash
 sudo systemctl enable --now dave     # start nu en bij elke herstart
+sudo dave log                        # het logboek: alles wat hij deed en waarom (sudo dave log live / hue / 200)
 journalctl -u dave -f                # meekijken wat hij hoort en doet
 ```
 

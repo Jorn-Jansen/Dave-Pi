@@ -3,8 +3,7 @@ Timers, reminders and alarms, like Dave on the PC: kept in the settings so they 
 
 - A timer: "a timer for 10 minutes for the pizza".
 - A reminder: "remind me tomorrow at 9 to put the bins out", once or repeating (daily, weekdays, weekly).
-- An alarm: "wake me up at 7", once or repeating. It keeps going off (with the lights slowly getting brighter before it,
-  when that's on) until you say "stop" or "snooze".
+- An alarm: "wake me up at 7", once or repeating. It keeps going off until you say "stop" or "snooze".
 """
 
 import threading
@@ -16,7 +15,6 @@ from . import config
 
 on_due = None    # (kind, text, item): something is due (set by the main loop)
 on_ring = None   # (item, round): the alarm is still ringing (every 30 s, until stop or snooze)
-on_sunrise = None  # (item, level 0..1): the lights before an alarm
 
 _lock = threading.RLock()
 _thread = None
@@ -58,20 +56,12 @@ def _check():
     with _lock:
         items = _items()
         for item in items:
-            # Before an alarm: the lights slowly brighter over 10 minutes (when that's on)
-            if item["kind"] == "alarm" and config.get("alarm_lights") and on_sunrise and 0 < item["at"] - now <= 600:
-                step = int((600 - (item["at"] - now)) // 60)  # 0..9
-                if item.get("sunrise", -1) < step:
-                    item["sunrise"] = step
-                    changed = True
-                    threading.Thread(target=on_sunrise, args=(item, (step + 1) / 10), daemon=True).start()
             if item["at"] <= now:
                 if now - item["at"] < 3600:  # (ones missed by more than an hour while the Pi was off: not announced anymore)
                     due.append(dict(item))
                 following = _next(item, now)
                 if following:
                     item["at"] = following
-                    item.pop("sunrise", None)
                 else:
                     item["done"] = True
                 changed = True

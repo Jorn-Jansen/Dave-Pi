@@ -21,6 +21,7 @@
   sudo dave alarm [7:30 | remove [tijd] | stop | snooze]   alarms: list, set, remove, stop
   sudo dave stopwatch [start|lap|pause|resume|stop|reset]
   sudo dave phone <ntfy-kanaal>        announcements (washer done, reminders) to your phone too
+  sudo dave log [live | 200 | <woord>] the logbook: everything Dave did, when, and who asked for it
   sudo dave status                     what's set up, and the service
   sudo dave update                     get the newest Dave from GitHub and install it
   sudo dave config [key] [value]       see or change one setting
@@ -33,7 +34,7 @@ import sys
 import threading
 import time
 
-from . import appliances, brain, config, groq, hue, listen, smartthings, stopwatch, thermostat, timers, tv, voice
+from . import appliances, brain, config, groq, hue, listen, log, smartthings, stopwatch, thermostat, timers, tv, voice
 
 
 def main(argv=None):
@@ -44,12 +45,16 @@ def main(argv=None):
     command, rest = args[0], args[1:]
     handlers = {"run": run, "ask": ask, "chat": chat, "say": say, "setup": setup, "hue": hue_command, "smartthings": smartthings_command, "thermostaat": thermostat_command, "thermostat": thermostat_command, "tv": tv_command,
                 "update": update, "voice": voice_command, "memory": memory_command, "timers": timers_command, "alarm": alarm_command,
-                "stopwatch": stopwatch_command, "phone": phone_command, "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command}
+                "stopwatch": stopwatch_command, "phone": phone_command, "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command, "log": log_command}
     if command not in handlers:
         print(f"Onbekend commando: {command}\n{__doc__}")
         return 1
     if command not in ("run",) and os.geteuid() != 0 and not os.access(config.PATH, os.W_OK):
         print("Tip: gebruik sudo (de instellingen staan in /etc/dave, alleen voor root).")
+    if command != "run":
+        log.default = "terminal"
+    if command not in ("log", "status"):
+        log.write("commando: sudo dave " + " ".join([command] + _without_keys(command, rest)))
     try:
         return handlers[command](rest) or 0
     except KeyboardInterrupt:
@@ -69,6 +74,7 @@ def _announcements(speak=True):
     """What happens when a timer, reminder or alarm is due, before an alarm (the lights), and when the washer or dryer is done."""
     def say(text):
         print(f"⏰ {text}", flush=True)
+        log.write(f"zegt: {text}", "timer/wekker")
         if speak:
             voice.speak(text)
 
@@ -91,15 +97,7 @@ def _announcements(speak=True):
         elif round % 2 == 0:
             say(config.say(f"Time to get up. Say: hey {config.get('name')}, stop.", f"Tijd om op te staan. Zeg: hey {config.get('name')}, stop."))
 
-    def sunrise(item, level):
-        if not config.get("hue_user"):
-            return
-        try:
-            hue.set_lights(config.get("alarm_room") or "", brightness=max(1, int(level * 100)), color="warm")
-        except Exception as e:
-            print(f"(alarm lights: {e})", flush=True)
-
-    timers.on_due, timers.on_ring, timers.on_sunrise = due, ring, sunrise
+    timers.on_due, timers.on_ring = due, ring
     appliances.on_news = say
 
 
@@ -126,6 +124,8 @@ def run(_):
                 if not wake.heard(mic.read()):
                     continue
                 print("· wekwoord gehoord", flush=True)
+                log.by("stem")
+                log.write("wekwoord gehoord")
                 voice.tone("listen")
                 follow_up = True
                 while follow_up:  # a question back ("which room?") keeps listening, without the wake word
@@ -136,6 +136,7 @@ def run(_):
                     voice.tone("heard")
                     text = groq.transcribe(audio)
                     print(f"jij: {text}", flush=True)
+                    log.write(f"verstaan: {text!r}")
                     if not text:
                         break
                     answer = brain.ask(text, on_action=lambda n, a, r: print(f"  ({n}) {r}", flush=True))
@@ -150,12 +151,14 @@ def run(_):
             raise
         except (groq.GroqError, hue.HueError, smartthings.SmartThingsError) as e:
             print(f"⚠ {e}", flush=True)
+            log.write(f"fout: {e}")
             try:
                 voice.speak(str(e))
             except Exception:
                 pass
         except Exception as e:
             print(f"⚠ {type(e).__name__}: {e} (opnieuw over 15 s)", flush=True)
+            log.write(f"fout: {type(e).__name__}: {e}")
             time.sleep(15)
         finally:
             if mic:
@@ -338,6 +341,38 @@ def tv_command(rest):
         print(", ".join(sorted(set(tv.APPS) | set(config.get("tv_apps") or {}))))
     else:
         print(tv.control(sub, " ".join(rest[1:]), which))
+
+
+def _without_keys(command, rest):
+    """A command for the logbook, without keys: a setting's value only for normal settings, no tokens."""
+    if command == "config" and len(rest) > 1 and (rest[0] in config.SECRETS or rest[0] not in config.DEFAULTS):
+        return rest[:1] + ["…"]
+    if command == "smartthings" and rest[:1] == ["token"]:
+        return rest[:1] + ["…"]
+    return ["…" if len(w) > 30 and " " not in w and "://" not in w else w for w in rest]  # (anything that looks like a key)
+
+
+def log_command(rest):
+    """The logbook: the last 40 lines, more (sudo dave log 200), only lines with a word (sudo dave log hue), or live."""
+    if rest and rest[0] in ("live", "-f", "follow"):
+        print(f"Live meekijken in {log.PATH} (Ctrl+C om te stoppen)…")
+        seen = len(log.lines())
+        while True:
+            now = log.lines()
+            for line in now[seen:] if len(now) >= seen else now:
+                print(line, flush=True)
+            seen = len(now)
+            time.sleep(1)
+    lines = log.lines()
+    if rest and not rest[0].isdigit():
+        word = " ".join(rest).lower()
+        lines = [l for l in lines if word in l.lower()]
+    count = int(rest[0]) if rest and rest[0].isdigit() else 40
+    if not lines:
+        print(f"Nog niets in het logboek ({log.PATH}).")
+        return
+    print("\n".join(lines[-count:]))
+    print(f"({min(count, len(lines))} van {len(lines)} regels · sudo dave log 200 · sudo dave log hue · sudo dave log live)")
 
 
 def config_command(rest):

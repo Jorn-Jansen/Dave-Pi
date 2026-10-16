@@ -13,8 +13,6 @@ DEFAULTS = {
     "memories": [],
     "schedule": [],                 # timers, reminders and alarms (they survive a restart)
     "stopwatch": {},
-    "alarm_lights": True,           # the Hue lights slowly brighter in the 10 minutes before an alarm
-    "alarm_room": "",               # which room for that ("" = all lights)
     "appliance_alerts": True,       # say when the washer / dryer is (almost) done
     "phone_topic": "",              # also to your phone: an ntfy channel (the free ntfy app), e.g. the one PC Dave uses                 # what Dave remembers for good ("onthoud dat…"); sudo dave memory
     "groq_key": "",                 # free at console.groq.com/keys: the AI and speech recognition
@@ -51,6 +49,7 @@ DEFAULTS = {
     "smartthings_expires": 0,
 }
 
+OLD = {"alarm_lights", "alarm_room"}  # (settings Dave doesn't have anymore)
 SECRETS = {"groq_key", "azure_key", "hue_user", "smartthings_token", "smartthings_client_secret", "smartthings_refresh", "smartthings_access"}
 
 _cache = None
@@ -79,6 +78,8 @@ def load():
             pass
         except (OSError, ValueError) as e:
             print(f"(couldn't read {PATH}: {e})")
+        for old in OLD:
+            data.pop(old, None)
         _cache = {**json.loads(json.dumps(DEFAULTS)), **data}  # (a fresh copy of the defaults: lists and dicts not shared)
     return _cache
 
