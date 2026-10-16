@@ -81,6 +81,13 @@ over een kanaal dat bij de huiscode hoort. Koppelen: `sudo dave lijst koppel` (c
 In de terminal: `sudo dave lijst`, `sudo dave lijst maak Klusjes`, `sudo dave lijst boodschappen + melk, kaas`, `sudo dave lijst boodschappen - kaas`.
 Code uitgelekt? `sudo dave lijst koppel nieuw`.
 
+## De vaatwasser (Home Connect: Bosch, Siemens…)
+
+`sudo dave homeconnect setup` — eenmalig: een gratis app op developer.home-connect.com (OAuth Flow: Device Flow, met het e-mailadres van je
+Home Connect-app als test-account), dan een code bevestigen op je telefoon. Daarna: *"hoe lang moet de vaatwasser nog?"*, *"is de vaatwasser
+klaar?"*, en Dave zegt het zelf als hij bijna klaar en klaar is (ook op je telefoon, met `sudo dave phone`). *"Start de vaatwasser"* werkt
+als op afstand starten aan staat op de vaatwasser zelf. In de terminal: `sudo dave vaatwasser`, `sudo dave vaatwasser start eco`.
+
 ## Wasmachine en droger
 
 Dave zegt vanzelf als de wasmachine of droger **bijna klaar** is (nog 5 minuten) en als hij **klaar** is. Ook op je telefoon:

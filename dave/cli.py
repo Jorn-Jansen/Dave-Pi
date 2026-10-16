@@ -19,6 +19,7 @@
   sudo dave thermostaat setup | status | 21 | auto | ontkoppel   the ATAG thermostat (HomeKit or its own connection)
   sudo dave timers                     timers, reminders and alarms (sudo dave timers cancel <woorden>)
   sudo dave alarm [7:30 | remove [tijd] | stop | snooze]   alarms: list, set, remove, stop
+  sudo dave homeconnect setup | status | start [programma]   the dishwasher (Bosch / Siemens Home Connect); also: sudo dave vaatwasser
   sudo dave lijst [naam] | koppel [nieuw] | maak <naam> | weg <naam>   the lists (shared with Dave on your iPhone)
   sudo dave lijst <naam> + melk, eieren  |  sudo dave lijst <naam> - melk   on and off a list
   sudo dave stopwatch [start|lap|pause|resume|stop|reset]
@@ -36,7 +37,7 @@ import sys
 import threading
 import time
 
-from . import appliances, brain, config, groq, homekit, hue, listen, lists, log, smartthings, stopwatch, thermostat, timers, tv, voice
+from . import appliances, brain, config, groq, homeconnect, homekit, hue, listen, lists, log, smartthings, stopwatch, thermostat, timers, tv, voice
 
 
 def main(argv=None):
@@ -47,7 +48,7 @@ def main(argv=None):
     command, rest = args[0], args[1:]
     handlers = {"run": run, "ask": ask, "chat": chat, "say": say, "setup": setup, "hue": hue_command, "smartthings": smartthings_command, "thermostaat": thermostat_command, "thermostat": thermostat_command, "tv": tv_command,
                 "update": update, "voice": voice_command, "memory": memory_command, "timers": timers_command, "alarm": alarm_command,
-                "stopwatch": stopwatch_command, "phone": phone_command, "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command, "log": log_command, "lijst": list_command, "lijsten": list_command, "list": list_command, "lists": list_command}
+                "stopwatch": stopwatch_command, "phone": phone_command, "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command, "log": log_command, "homeconnect": homeconnect_command, "vaatwasser": homeconnect_command, "lijst": list_command, "lijsten": list_command, "list": list_command, "lists": list_command}
     if command not in handlers:
         print(f"Onbekend commando: {command}\n{__doc__}")
         return 1
@@ -62,7 +63,7 @@ def main(argv=None):
     except KeyboardInterrupt:
         print()
         return 130
-    except (groq.GroqError, hue.HueError, smartthings.SmartThingsError, tv.TVError, thermostat.ThermostatError, lists.ListError, homekit.HomeKitError) as e:
+    except (groq.GroqError, hue.HueError, smartthings.SmartThingsError, tv.TVError, thermostat.ThermostatError, lists.ListError, homekit.HomeKitError, homeconnect.HomeConnectError) as e:
         print(f"⚠ {e}")
         return 1
     except OSError as e:  # no connection, a missing program…: a short line, not a wall of text
@@ -109,6 +110,7 @@ def _announcements(speak=True):
 
     timers.on_due, timers.on_ring, timers.on_do = due, ring, do
     appliances.on_news = say
+    homeconnect.on_news = say
 
 
 def _service_running():
@@ -121,6 +123,7 @@ def run(_):
     timers.start()
     appliances.start()
     lists.start()
+    homeconnect.watch()
     phrase = config.get("wake_phrase") or f"hey {config.get('name').lower()}"
     print(f"{config.get('name')} op de Pi draait. Luistert naar \"{phrase}\".", flush=True)
     if not config.get("groq_key"):
@@ -352,6 +355,34 @@ def tv_command(rest):
         print(", ".join(sorted(set(tv.APPS) | set(config.get("tv_apps") or {}))))
     else:
         print(tv.control(sub, " ".join(rest[1:]), which))
+
+
+def homeconnect_command(rest):
+    sub = rest[0].lower() if rest else "status"
+    if sub == "setup":
+        print("Home Connect koppelen (Bosch, Siemens…). Eenmalig, ongeveer 5 minuten:")
+        print(" 1. Ga naar https://developer.home-connect.com en maak een gratis account (Register).")
+        print(" 2. Applications → Register application:")
+        print("      Application ID: Dave  ·  OAuth Flow: Device Flow")
+        print("      Home Connect User Account for Testing: het e-mailadres van je Home Connect-app (waar de vaatwasser in staat)")
+        print(" 3. Kopieer de Client ID (en het Client Secret als het er staat). Een nieuwe app werkt soms pas na 15 min tot een uur.\n")
+        _ask_setting("homeconnect_client_id", "   Client ID")
+        _ask_setting("homeconnect_client_secret", "   Client Secret (Enter als er geen is)", secret=True)
+        def show(link, code):
+            print(f"\n➡  Open op je telefoon: {link}\n   Log in met je Home Connect-account en bevestig de code: {code}\n(Dave wacht tot je bevestigd hebt…)")
+        homeconnect.login(show)
+        print("✅ Gekoppeld met Home Connect.")
+        for a in homeconnect.appliances():
+            print(f"  · {homeconnect._name(a)} ({a.get('brand', '')} {a.get('type', '')}){'' if a.get('connected', True) else ' – offline'}")
+        if _service_running():
+            subprocess.run(["systemctl", "restart", "dave"])  # (so the service starts listening for 'done')
+    elif sub == "start":
+        print(homeconnect.start("", " ".join(rest[1:])))
+    elif sub in ("list", "lijst"):
+        for a in homeconnect.appliances():
+            print(f"  · {homeconnect._name(a)} ({a.get('brand', '')} {a.get('type', '')}){'' if a.get('connected', True) else ' – offline'}")
+    else:
+        print(homeconnect.status(" ".join(rest[1:]) if sub == "status" else " ".join(rest)))
 
 
 def list_command(rest):
@@ -647,6 +678,7 @@ def status(_):
     print(f"SmartThings: {'✅ ' + st if st else '❌ (sudo dave smartthings token …)'}")
     print(f"Geheugen: {len(config.get('memories') or [])} dingen (sudo dave memory) · gepland: {timers.describe()}")
     print(f"Was/droger-meldingen: {'aan' if config.get('appliance_alerts') else 'uit'} · telefoon: {config.get('phone_topic') or '(geen, sudo dave phone <kanaal>)'}")
+    print(f"Home Connect: {'✅' if homeconnect.ready() else '❌ (sudo dave homeconnect setup)'}")
     print(f"Lijsten: {len(lists.visible())} · gedeeld met telefoons via de huiscode (sudo dave lijst koppel)")
     print(f"Thermostaat: {'✅ HomeKit' if config.get('thermostat_kind') == 'homekit' else '✅ ' + config.get('thermostat_host') if config.get('thermostat_host') else '❌ (sudo dave thermostaat setup)'}")
     tvs = tv.all_tvs()
