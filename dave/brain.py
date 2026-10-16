@@ -74,7 +74,8 @@ TOOLS = [
            "command": _s("For set: which command to do then: hue, tv, smartthings, thermostat, volume, lists"),
            "args": {"type": "object", "description": "For set: that command's arguments, exactly as you'd give them to it now"},
            "seconds": {"type": "number", "description": "For set: in how many seconds (15 seconds = 15, 10 minutes = 600)"},
-           "when": _s("For set, instead of seconds: the clock time, HH:MM, like for an alarm (it picks the first coming one)"),
+           "when": _s("For set, instead of seconds: the clock time HH:MM for today / the first coming one (like an alarm); for tomorrow "
+                      "or another day (morgen, zaterdag): YYYY-MM-DD HH:MM with that date"),
            "part": {"type": "string", "enum": ["", "morning", "afternoon", "evening", "night"]},
            "repeat": {"type": "string", "enum": ["none", "daily", "weekdays", "weekend"]},
            "label": _s("Short, what will happen, in the user's language (e.g. 'tv woonkamer aan'); for cancel: words from it (empty = all)")},
@@ -350,6 +351,7 @@ def ask(text, on_action=None):
             answer = re.sub(r"\[\s*[a-zA-Z][a-zA-Z -]{1,20}?\s*\]\s*", "", (message.get("content") or "").strip())
             log.write(f"antwoord: {answer!r}")
             _history = (_history + [{"role": "user", "content": text}, {"role": "assistant", "content": answer}])[-12:]
+            answer = re.sub(r"[​-‍﻿]", "", answer).strip()  # (sometimes only an invisible character comes back)
             return answer or config.say("Done.", "Klaar.")
         messages.append({"role": "assistant", "content": message.get("content") or "", "tool_calls": calls})
         for call in calls:
