@@ -99,4 +99,4 @@ met een offline stem.
 
 ## Licentie
 
-[PolyForm Strict 1.0.0](LICENSE): je mag Dave downloaden en gebruiken voor persoonlijk, niet-commercieel gebruik; je mag hem niet veranderen, kopiëren, verder verspreiden of verkopen.
+[PolyForm Strict 1.0.0](LICENSE): je mag Dave downloaden en gebruiken voor persoonlijk, niet-commercieel gebruik; je mag hem niet veranderen, kopiëren, verder verspreiden of verkopen. Gebruikt [Vosk](https://alphacephei.com/vosk/) (Apache 2.0) en [androidtvremote2](https://github.com/tronikos/androidtvremote2) (Apache 2.0).
