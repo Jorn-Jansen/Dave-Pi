@@ -1,7 +1,7 @@
 """
 The thermostat through Apple HomeKit, over your own Wi-Fi (no cloud, no Apple device needed): for the ATAG One Zone, the one
 with the ATAG Zone app, which doesn't have the older ATAG One's own connection anymore. Dave becomes its HomeKit "owner"
-once (sudo dave thermostaat setup, with the 8-digit HomeKit code from the thermostat's sticker or menu), like Home Assistant's
+once (sudo dave thermostaat setup, with the 8-digit HomeKit code the thermostat shows on its screen), like Home Assistant's
 HomeKit Controller does, with the same library (aiohomekit). The pairing is kept next to the settings (only readable by root).
 
 HomeKit's thermostat: the temperature now and the one it's set to, and its mode: off, heat (manual: holds the temperature) or
@@ -131,7 +131,18 @@ async def _pair(device_id, pin):
         if ALIAS in controller.aliases:
             with contextlib.suppress(Exception):  # (the old one may be gone already)
                 await controller.remove_pairing(ALIAS)
-        discovery = await controller.async_find(device_id)
+        discovery = None
+        for _ in range(30):  # (a slow thermostat on Wi-Fi can take a while to be heard again: up to 30 s, not aiohomekit's 10)
+            async for d in controller.async_discover(1):
+                if d.description.id.lower() == device_id.lower():
+                    discovery = d
+                    break
+            if discovery:
+                break
+            await asyncio.sleep(1)
+        if discovery is None:
+            raise HomeKitError(config.say("I can't find the thermostat on the network right now. Try again in a minute.",
+                                          "Ik vind de thermostaat nu niet op het netwerk. Probeer het over een minuutje nog eens."))
         finish = await discovery.async_start_pairing(ALIAS)
         pairing = await finish(pin)
         _write_file({ALIAS: pairing.pairing_data})  # (ourselves: aiohomekit 4 keeps a new pairing where save_data doesn't look)
@@ -155,8 +166,8 @@ def pair(device_id, code):
         _run(_pair(device_id, _pin(code)))
     except HomeKitError as e:
         if "AuthenticationError" in str(e):
-            raise HomeKitError(config.say("That HomeKit code isn't right. Check the sticker or the thermostat's menu and try again.",
-                                          "Die HomeKit-code klopt niet. Kijk op de sticker of in het menu van de thermostaat en probeer het opnieuw.")) from e
+            raise HomeKitError(config.say("That HomeKit code isn't right. Check the code on the thermostat's screen and try again.",
+                                          "Die HomeKit-code klopt niet. Kijk nog eens naar de code op het scherm van de thermostaat en probeer het opnieuw.")) from e
         if "UnavailableError" in str(e) or "MaxPeersError" in str(e) or "BusyError" in str(e):
             raise HomeKitError(config.say("The thermostat won't pair now: it may already be in someone's Home app. Remove it there first.",
                                           "De thermostaat wil nu niet koppelen: misschien staat hij al in iemands Woning-app. Haal hem daar eerst weg.")) from e
