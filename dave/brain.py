@@ -50,10 +50,13 @@ TOOLS = [
            "command": _s("For command: e.g. on, off, setMachineState, setVolume"),
            "arguments": {"type": "array", "items": {"type": "string"}, "description": "For command: its arguments, e.g. ['pause'] or ['20']"}}, ["action"]),
     _tool("tv", "The TV (Google TV / Android TV): turn it on or off, its volume ('TV louder': volume_up, value 3 = three steps), mute, "
-          "what's on ('status'), open an app ('put Netflix on the TV': action app, value Netflix), or press a key (home, back, play_pause, ok, up…).",
+          "what's on ('status'), open an app ('put Netflix on the TV': action app, value Netflix), or press a key (home, back, play_pause, ok, up…). " +
+          "A specific series, film or video ('put Stranger Things on Netflix', 'play The Boys on Prime'): first look up its page on the web, then " +
+          "action app with value = that link (netflix.com/title/<id>, primevideo.com/detail/…, youtube.com/watch?v=…, disneyplus.com/…) and play = true.",
           {"action": {"type": "string", "enum": ["on", "off", "status", "app", "volume_up", "volume_down", "mute", "home", "back", "play_pause",
                                                  "play", "pause", "next", "previous", "up", "down", "left", "right", "ok", "channel_up", "channel_down", "input", "settings"]},
-           "value": _s("For app: the app's name (Netflix, YouTube, Disney+, Videoland…); for volume: how many steps"),
+           "value": _s("For app: the app's name (Netflix, YouTube, Disney+, Videoland…) or the link to a series/film/video; for volume: how many steps"),
+           "play": {"type": "boolean", "description": "For a series/film/video link: start playing it"},
            "tv": _s("Which TV, by its name (see the list); empty = the default one. Only fill it in when the user said which.")}, ["action"]),
     _tool("timer", "Timers: set one ('a timer for 10 minutes for the pizza'), list them ('how long does my timer still take?') or cancel.",
           {"action": {"type": "string", "enum": ["set", "list", "cancel"]},
@@ -106,7 +109,7 @@ def _run(name, args):
             arguments = [int(a) if isinstance(a, str) and a.lstrip("-").isdigit() else a for a in (args.get("arguments") or [])]  # (numbers as numbers)
             return smartthings.command(device, args.get("capability", "switch"), args.get("command", ""), arguments)
         if name == "tv":
-            return tv.control(args.get("action", "status"), str(args.get("value") or ""), args.get("tv") or "")
+            return tv.control(args.get("action", "status"), str(args.get("value") or ""), args.get("tv") or "", bool(args.get("play")))
         if name == "timer":
             action = args.get("action")
             if action == "set":

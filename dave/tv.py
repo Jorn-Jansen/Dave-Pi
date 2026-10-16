@@ -27,6 +27,12 @@ LINKS = {
     "com.spotify.tv.android": "spotify://", "com.plexapp.android": "plex://", "tv.twitch.android.app": "twitch://home",
     "com.wbd.stream": "https://play.max.com",
 }
+# A link to something specific (a series, a film, a video) → the app it opens in
+SITES = {
+    "netflix.com": "com.netflix.ninja", "youtube.com": "com.google.android.youtube.tv", "youtu.be": "com.google.android.youtube.tv",
+    "primevideo.com": "com.amazon.amazonvideo.livingroom", "amazon.": "com.amazon.amazonvideo.livingroom", "disneyplus.com": "com.disney.disneyplus",
+    "max.com": "com.wbd.stream", "spotify.com": "com.spotify.tv.android", "videoland.com": "nl.rtl.videoland.v2", "npo": "nl.uitzendinggemist",
+}
 KEYS = {  # what the AI can press
     "power": "POWER", "volume_up": "VOLUME_UP", "volume_down": "VOLUME_DOWN", "mute": "VOLUME_MUTE", "home": "HOME", "back": "BACK",
     "play_pause": "MEDIA_PLAY_PAUSE", "play": "MEDIA_PLAY", "pause": "MEDIA_PAUSE", "next": "MEDIA_NEXT", "previous": "MEDIA_PREVIOUS",
@@ -171,7 +177,7 @@ async def _connected(tv_name, info, attempts=1):
             await asyncio.sleep(2)
 
 
-def control(action, value="", which=""):
+def control(action, value="", which="", play=False):
     """On the TV called [which] (empty: the default one): on, off, status, a key (volume_up, mute, home…) or app (Netflix…)."""
     tv_name, info = pick(which)
     label = tv_name if len(all_tvs()) > 1 else config.say("the TV", "de tv")  # (only name it when there are several)
@@ -201,9 +207,14 @@ def control(action, value="", which=""):
                 return f"{tv_name}: " + (config.say("on", "aan") if remote.is_on else config.say("off (standby)", "uit (standby)")) + \
                        (f", app {app}" if app and remote.is_on else "") + (f", volume {volume}" if volume is not None and remote.is_on else "")
             if action == "app":
+                link = value.strip() if value.strip().lower().startswith(("http://", "https://")) else ""
                 want = (value or "").lower().replace(" ", "").replace("+", "")
+                if link:  # a series / film / video itself: the app is the site's
+                    want = next((p for site, p in SITES.items() if site in link.lower()), "")
                 apps = {**APPS, **{k.lower().replace(" ", ""): v for k, v in (config.get("tv_apps") or {}).items()}}  # (your own: sudo dave tv add-app)
-                package = next((p for name, p in sorted(apps.items(), key=lambda x: -len(x[0])) if name in want), None)
+                package = want if link else next((p for name, p in sorted(apps.items(), key=lambda x: -len(x[0])) if name in want), None)
+                if link and not package:
+                    package = "?"
                 if not package:
                     if "." not in value:
                         raise TVError(config.say(f"I don't know the app {value}. Add it with: sudo dave tv add-app \"{value}\" <its package name>",
@@ -217,14 +228,18 @@ def control(action, value="", which=""):
                     remote.send_key_command("HOME")
                     await asyncio.sleep(1.5)
                 print(f"(tv {tv_name}: was showing {before or '?'}, now {remote.current_app or '?'})")
-                # The app's own link first; if the TV doesn't switch to it, the package itself
-                for target in [t for t in (LINKS.get(package), package) if t]:
+                # A series' own link; otherwise the app's own link first, and if the TV doesn't switch to it, the package itself
+                for target in ([link] if link else [t for t in (LINKS.get(package), package) if t]):
                     print(f"(tv {tv_name}: opening {target})")
                     remote.send_launch_app_command(target)
                     for _ in range(12):  # up to 6 s: did it open?
                         await asyncio.sleep(0.5)
-                        if (remote.current_app or "") == package:
-                            return config.say(f"{value} is open on {label}.", f"{value} staat open op {label}.")
+                        if (remote.current_app or "") == package or (link and package == "?" and (remote.current_app or "") != before):
+                            if play:  # its page is open: press play (that's where the focus usually is)
+                                await asyncio.sleep(3.5)
+                                remote.send_key_command("DPAD_CENTER")
+                            return config.say(f"It's open on {label}.", f"Hij staat open op {label}.") if link else \
+                                   config.say(f"{value} is open on {label}.", f"{value} staat open op {label}.")
                 now = remote.current_app or "?"
                 print(f"(tv {tv_name}: sent {package}, it now shows {now})")
                 return config.say(f"I asked {label} to open {value}, but it still shows {now}. Is the app installed there?",

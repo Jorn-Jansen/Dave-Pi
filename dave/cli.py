@@ -11,6 +11,7 @@
   sudo dave smartthings list | status <device>
   sudo dave tv setup [naam] | list | default <naam> | remove <naam>   TVs (Google TV / Android TV), each paired once
   sudo dave tv on|off|status [naam]    and  sudo dave tv app netflix --tv slaapkamer
+  sudo dave tv app https://www.netflix.com/title/80057281   a series or film itself
   sudo dave tv app netflix | apps | add-app "Ziggo GO" com.ziggo.tv
   sudo dave test-speaker | test-mic    check the sound
   sudo dave status                     what's set up, and the service
