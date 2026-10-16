@@ -10,6 +10,7 @@ DEFAULTS = {
     "language": "nl-NL",            # what Dave speaks (nl-NL or en-US)
     "personality": "normal",        # normal, chill, hyped, butler, sarcastic
     "wake_phrase": "hey dave",
+    "memories": [],                 # what Dave remembers for good ("onthoud dat…"); sudo dave memory
     "groq_key": "",                 # free at console.groq.com/keys: the AI and speech recognition
     # The voice: Azure (natural, online) when there's a key, otherwise Piper (offline) if installed, otherwise espeak-ng
     "voice_engine": "auto",         # auto (Azure when there's a key), azure, or offline (Piper if installed, else espeak)

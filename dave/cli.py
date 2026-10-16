@@ -15,6 +15,7 @@
   sudo dave tv app https://www.netflix.com/title/80057281   a series or film itself
   sudo dave tv app netflix | apps | add-app "Ziggo GO" com.ziggo.tv
   sudo dave test-speaker | test-mic    check the sound
+  sudo dave memory [list] | add "…" | remove <nr or words> | clear   what Dave remembers for good
   sudo dave status                     what's set up, and the service
   sudo dave update                     get the newest Dave from GitHub and install it
   sudo dave config [key] [value]       see or change one setting
@@ -37,7 +38,7 @@ def main(argv=None):
         return 0
     command, rest = args[0], args[1:]
     handlers = {"run": run, "ask": ask, "chat": chat, "say": say, "setup": setup, "hue": hue_command, "smartthings": smartthings_command, "tv": tv_command,
-                "update": update, "voice": voice_command, "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command}
+                "update": update, "voice": voice_command, "memory": memory_command, "test-speaker": test_speaker, "test-mic": test_mic, "status": status, "config": config_command}
     if command not in handlers:
         print(f"Onbekend commando: {command}\n{__doc__}")
         return 1
@@ -297,6 +298,33 @@ def config_command(rest):
         print(f"{rest[0]} = {config.shown(rest[0], config.get(rest[0]))}")
 
 
+def memory_command(rest):
+    sub = (rest[0] if rest else "list").lower()
+    memories = list(config.get("memories") or [])
+    if sub == "list":
+        if not memories:
+            print("Dave onthoudt nog niets. Zeg \"onthoud dat…\" of: sudo dave memory add \"…\"")
+        for i, m in enumerate(memories, 1):
+            print(f"{i:>3}. {m}")
+    elif sub == "add":
+        print(brain.remember(" ".join(rest[1:])))
+    elif sub in ("remove", "forget"):
+        what = " ".join(rest[1:])
+        if what.isdigit() and 1 <= int(what) <= len(memories):
+            gone = memories.pop(int(what) - 1)
+            config.set("memories", memories)
+            print(f"Vergeten: {gone}")
+        else:
+            print(brain.forget(what))
+    elif sub == "clear":
+        if input(f"Alle {len(memories)} herinneringen vergeten? (j/n) ").strip().lower() in ("j", "ja", "y", "yes"):
+            config.set("memories", [])
+            print("Alles vergeten.")
+    else:
+        print('Gebruik: sudo dave memory [list] | add "…" | remove <nummer of woorden> | clear')
+        return 1
+
+
 def voice_command(rest):
     sub = (rest[0] if rest else "").lower()
     if sub in ("offline", "azure", "auto", "espeak"):
@@ -381,6 +409,7 @@ def status(_):
     print(f"Hue: {'✅ ' + config.get('hue_bridge') if config.get('hue_user') else '❌ (sudo dave hue setup)'}")
     st = "OAuth" if config.get("smartthings_refresh") else "token" if config.get("smartthings_token") else ""
     print(f"SmartThings: {'✅ ' + st if st else '❌ (sudo dave smartthings token …)'}")
+    print(f"Geheugen: {len(config.get('memories') or [])} dingen (sudo dave memory)")
     tvs = tv.all_tvs()
     print(f"TV's: " + (", ".join(f"{'⭐' if n == tv.default() else ''}{n} ({i.get('model') or i.get('host')})" for n, i in tvs.items()) if tvs else "❌ (sudo dave tv setup)"))
     print(f"Wekwoord: \"{config.get('wake_phrase')}\" · model {'✅' if os.path.isdir(listen.MODEL) else '❌ ' + listen.MODEL}")

@@ -64,6 +64,12 @@ TOOLS = [
            "label": _s("What it's for (short), or which to cancel (empty = all)")}, ["action"]),
     _tool("volume", "This speaker's volume: louder, quieter or a level ('volume to 40%').",
           {"level": {"type": "integer", "description": "0-100"}, "change": {"type": "string", "enum": ["up", "down"]}}),
+    _tool("remember", "Remember something for good when the user asks ('onthoud dat…', 'remember that…') or tells you something about "
+          "themselves or the home worth keeping ('I like warm white light', 'the bike shed code is 1234'). Only for NEW information: never when "
+          "they ask what you know or remember. Write it as a short note about the user, e.g. 'Likes warm white light', 'Bike shed code: 1234'.",
+          {"fact": _s("The note, short, in the user's language (e.g. 'Houdt van warm wit licht', 'Code fietsenstalling: 4821')")}, ["fact"]),
+    _tool("forget", "Forget something you remembered ('vergeet dat van de fietsenstalling', 'forget my birthday'); 'everything' forgets all.",
+          {"fact": _s("Words from what to forget, or 'everything'")}, ["fact"]),
     _tool("set_personality", "Change how you talk: normal, chill, hyped, butler or sarcastic ('be a butler', 'act normal').",
           {"personality": {"type": "string", "enum": list(PERSONALITIES)}}, ["personality"]),
 ]
@@ -89,7 +95,17 @@ def _system():
             "no lists, no markdown, no emoji, no links. Use your commands for the lights (Hue), the TV, Samsung devices (SmartThings), timers and "
             "the volume; when the user asks for several things at once, do all of them. Look things up on the web for news, weather and facts. "
             f"It's {time.strftime('%A %d %B %Y, %H:%M')} now. Only end with a question when you really need an answer (then the speaker keeps " +
-            "listening); never add filler questions like 'Anything else?' or 'Is er verder nog iets?', just stop after the answer.").strip()
+            "listening); never add filler questions like 'Anything else?' or 'Is er verder nog iets?', just stop after the answer."
+            + _memories()).strip()
+
+
+def _memories():
+    memories = config.get("memories") or []
+    if not memories:
+        return ""
+    return ("\n\nWhat you remember about the user and their home. Use it whenever it applies: when they turn lights on without saying a "
+            "colour or brightness, use the colour or brightness they like; answer 'what do you know about me' and questions like 'what's the "
+            "code' from this list (don't save it again):\n" + "\n".join(f"- {m}" for m in memories))
 
 
 def _run(name, args):
@@ -119,6 +135,10 @@ def _run(name, args):
             return timers.describe()
         if name == "volume":
             return set_volume(args.get("level"), args.get("change"))
+        if name == "remember":
+            return remember(args.get("fact", ""))
+        if name == "forget":
+            return forget(args.get("fact", ""))
         if name == "set_personality":
             config.set("personality", args.get("personality", "normal"))
             return f"personality is now {config.get('personality')}"
@@ -127,6 +147,32 @@ def _run(name, args):
     except Exception as e:
         return f"Failed ({type(e).__name__}): {e}"
     return f"Unknown command {name}"
+
+
+def remember(fact):
+    fact = " ".join(str(fact).split())[:300]
+    if not fact:
+        return "Nothing to remember"
+    memories = list(config.get("memories") or [])
+    if fact.lower() in (m.lower() for m in memories):
+        return f"Already remembered: {fact}"
+    config.set("memories", (memories + [fact])[-200:])
+    return f"Remembered: {fact}"
+
+
+def forget(words):
+    """Forgets the memories that contain [words] (all of them for 'everything'). Returns what was forgotten."""
+    memories = list(config.get("memories") or [])
+    w = str(words).lower().strip()
+    if w in ("everything", "alles", "all", "alle"):
+        config.set("memories", [])
+        return f"Forgot all {len(memories)} memories"
+    keys = [k for k in re.findall(r"\w+", w) if len(k) > 2]
+    gone = [m for m in memories if w in m.lower() or (keys and sum(k in m.lower() for k in keys) >= max(1, len(keys) // 2 + 1))]
+    if not gone:
+        return f"Nothing remembered about {words}. What I remember: " + ("; ".join(memories) or "nothing")
+    config.set("memories", [m for m in memories if m not in gone])
+    return "Forgot: " + "; ".join(gone)
 
 
 def set_volume(level=None, change=None):
