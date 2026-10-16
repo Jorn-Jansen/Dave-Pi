@@ -1,6 +1,8 @@
 """
 The washer and dryer (SmartThings): Dave keeps an eye on them and says when one is almost done (5 minutes left) and when
-it's done, and sends it to your phone too when there's a phone channel (phone_topic, the ntfy app). Checked every minute.
+it's done, and sends it to your phone too when there's a phone channel (phone_topic, the ntfy app). Checked once a minute
+while nothing runs, every 10 seconds while one runs, and every 5 seconds in its last 2 minutes, so you hear it right away (each
+check is one small web request: next to nothing for the Pi).
 """
 
 import threading
@@ -9,8 +11,10 @@ import time
 from . import config, smartthings, web
 
 on_news = None  # (message): something to say (set by the main loop)
-_last = {}      # device id → its last state
+_last = {}      # device id → its last (state, job)
 _almost = set()
+_done = set()   # said "done" already (until it runs a new program)
+_devices = (0.0, [])  # (when fetched, the washers and dryers): the list itself only every 10 minutes
 
 
 def start():
@@ -21,13 +25,27 @@ def start():
 
 def _loop():
     while True:
+        wait = 60
         try:
-            check()
+            wait = check()
         except smartthings.SmartThingsError as e:
             print(f"(appliances: {e})", flush=True)
         except Exception as e:
             print(f"(appliances: {type(e).__name__}: {e})", flush=True)
-        time.sleep(60)
+        time.sleep(wait)
+
+
+def _machines():
+    """The washers and dryers (with their kind), from SmartThings' device list, fetched again every 10 minutes."""
+    global _devices
+    if time.time() - _devices[0] > 600:
+        found = []
+        for device in smartthings.devices():
+            kind = next((k for k in ("washer", "dryer") if any(c.startswith(f"{k}OperatingState") for c in device["capabilities"])), None)
+            if kind:
+                found.append((device, kind))
+        _devices = (time.time(), found)
+    return _devices[1]
 
 
 def _value(main, cap, attr):
@@ -35,20 +53,30 @@ def _value(main, cap, attr):
 
 
 def check():
-    """One look at the washers and dryers; says what changed."""
+    """One look at the washers and dryers; says what changed. Returns how many seconds until the next look."""
     if not (config.get("smartthings_token") or config.get("smartthings_refresh")):
-        return
-    for device in smartthings.devices():
-        kind = next((k for k in ("washer", "dryer") if any(c.startswith(f"{k}OperatingState") for c in device["capabilities"])), None)
-        if not kind:
-            continue
+        return 300
+    wait = 60
+    for device, kind in _machines():
         main = (smartthings._call("GET", f"/devices/{device['id']}/status") or {}).get("components", {}).get("main", {})
         state = _value(main, f"{kind}OperatingState", "machineState")
         job = _value(main, f"{kind}OperatingState", f"{kind}JobState")
         remaining = _value(main, f"samsungce.{kind}OperatingState", "remainingTime")
-        before = _last.get(device["id"])
-        _last[device["id"]] = state
+        before, before_job = _last.get(device["id"], (None, None))
+        _last[device["id"]] = (state, job)
         name = device["name"]
+        finished = job in ("finish", "finished")
+        if state == "run" and not finished:
+            _done.discard(device["id"])  # (a new program: it may say "done" again at the end)
+            wait = min(wait, 5 if isinstance(remaining, (int, float)) and remaining <= 2 else 10)
+        if device["id"] in _done:
+            continue
+        # Some report "finish" as the job while the machine still says "run" for a moment: that's done too
+        if before == "run" and state == "run" and finished:
+            _almost.discard(device["id"])
+            _done.add(device["id"])
+            _tell(config.say(f"The {name} is done.", f"De {name} is klaar."))
+            continue
         if state == "run" and isinstance(remaining, (int, float)) and 0 < remaining <= 5 and device["id"] not in _almost:
             _almost.add(device["id"])
             _tell(config.say(f"The {name} is almost done: about {int(remaining)} minutes left.", f"De {name} is bijna klaar: nog zo'n {int(remaining)} minuten."))
@@ -56,8 +84,10 @@ def check():
             _almost.discard(device["id"])
             if state == "pause":
                 continue
+            _done.add(device["id"])
             _tell(config.say(f"The {name} is done.", f"De {name} is klaar.") if job in (None, "none", "finish", "finished", "cooling", "wrinklePrevent")
                   else config.say(f"The {name} stopped ({job}).", f"De {name} is gestopt ({job})."))
+    return wait
 
 
 def _tell(message):
