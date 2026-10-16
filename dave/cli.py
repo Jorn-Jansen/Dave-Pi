@@ -378,6 +378,8 @@ def homeconnect_command(rest):
             subprocess.run(["systemctl", "restart", "dave"])  # (so the service starts listening for 'done')
     elif sub == "start":
         print(homeconnect.start("", " ".join(rest[1:])))
+    elif sub in ("aan", "on", "uit", "off"):
+        print(homeconnect.power("", sub in ("aan", "on")))
     elif sub in ("list", "lijst"):
         for a in homeconnect.appliances():
             print(f"  · {homeconnect._name(a)} ({a.get('brand', '')} {a.get('type', '')}){'' if a.get('connected', True) else ' – offline'}")

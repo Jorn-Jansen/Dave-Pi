@@ -119,7 +119,8 @@ TOOLS = [
     _tool("homeconnect", "Home Connect appliances (Bosch / Siemens: the dishwasher, …): how far it is and how long it still takes "
           "('hoe lang moet de vaatwasser nog?', 'is de vaatwasser klaar?': status), or start it ('start de vaatwasser', 'zet de vaatwasser "
           "op eco': start, program eco) — starting only works when remote start is on at the appliance.",
-          {"action": {"type": "string", "enum": ["status", "start"]},
+          {"action": {"type": "string", "enum": ["status", "start", "power_on", "power_off"],
+                      "description": "power_on / power_off: just switch it on or off ('zet de vaatwasser aan'); start: run a program ('start de vaatwasser')"},
            "appliance": _s("Which one, by name or kind (vaatwasser, oven…); empty = the dishwasher"),
            "program": _s("For start: a program by name (eco, auto, intensief, snel…); empty = the one picked on the appliance")}, ["action"]),
     _tool("lists", "The house's lists (shopping list, chores, …), the same as in the Lists tab on the phones: add things "
@@ -279,6 +280,8 @@ def _run(name, args):
                 return timers.cancel("alarm", args.get("label") or args.get("when") or "")  # (the AI sometimes gives the time as when)
             return timers.describe("alarm")
         if name == "homeconnect":
+            if args.get("action") in ("power_on", "power_off"):
+                return homeconnect.power(args.get("appliance") or "", args.get("action") == "power_on")
             if args.get("action") == "start":
                 return homeconnect.start(args.get("appliance") or "", args.get("program") or "")
             return homeconnect.status(args.get("appliance") or "")

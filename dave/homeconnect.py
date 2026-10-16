@@ -129,10 +129,20 @@ def _call(method, path, body=None):
         if e.code == 429:
             raise HomeConnectError(config.say("Home Connect's limit for today is reached (1000 requests). Tomorrow it works again.",
                                               "De limiet van Home Connect voor vandaag is bereikt (1000 vragen). Morgen werkt het weer.")) from e
-        if e.code == 409 or error.get("key") in ("SDK.Error.HomeAppliance.Connection.Initialization.Failed", "SDK.Error.ApplianceNotConnected"):
+        key, why = error.get("key") or "", error.get("description") or ""
+        print(f"(Home Connect {e.code} on {method} {path.split('/')[-1]}: {key} {why})", flush=True)
+        if "Connection" in key or "NotConnected" in key or "Offline" in key:
             raise HomeConnectError(config.say("The appliance isn't connected right now: Home Connect only reaches it while it's switched on.",
                                               "Het apparaat is nu niet verbonden: Home Connect bereikt hem alleen als hij aan staat.")) from e
-        raise HomeConnectError(f"Home Connect {e.code}: {error.get('description') or error.get('key') or ''}") from e
+        if "Remote" in key:
+            raise HomeConnectError(config.say("Remote start is off on the appliance: switch it on there (often a button with a Wi-Fi or remote sign), then try again.",
+                                              "Op afstand starten staat uit op het apparaat: zet het daar aan (vaak een knop met een wifi- of afstandsteken) en probeer het opnieuw.")) from e
+        if "Door" in key:
+            raise HomeConnectError(config.say("The door is open: close it first.", "De deur staat open: doe hem eerst dicht.")) from e
+        if "OperationState" in key:
+            raise HomeConnectError(config.say("It can't start now (is a program running already, or does it need you?).",
+                                              "Hij kan nu niet starten (draait er al een programma, of heeft hij je nodig?).")) from e
+        raise HomeConnectError(f"Home Connect: {why or key or e.code}") from e  # (in Home Connect's own words: 409 is many things)
     except OSError as e:
         raise HomeConnectError(config.say("I can't reach Home Connect.", "Ik kan Home Connect niet bereiken.")) from e
 
@@ -231,6 +241,22 @@ def start(which="", program=""):
     _call("PUT", f"/api/homeappliances/{a['haId']}/programs/active", {"data": {"key": key}})
     log.write(f"Home Connect: {name} gestart ({key.split('.')[-1]})")
     return config.say(f"The {name} is started.", f"De {name} is gestart.")
+
+
+def power(which="", on=True):
+    """Switch it on (or off / standby) without starting a program."""
+    a = find(which)
+    value = "BSH.Common.EnumType.PowerState." + ("On" if on else "Off")
+    try:
+        _call("PUT", f"/api/homeappliances/{a['haId']}/settings/BSH.Common.Setting.PowerState",
+              {"data": {"key": "BSH.Common.Setting.PowerState", "value": value}})
+    except HomeConnectError:
+        if on:
+            raise
+        _call("PUT", f"/api/homeappliances/{a['haId']}/settings/BSH.Common.Setting.PowerState",  # (some only do standby, not off)
+              {"data": {"key": "BSH.Common.Setting.PowerState", "value": "BSH.Common.EnumType.PowerState.Standby"}})
+    log.write(f"Home Connect: {_name(a)} {'aan' if on else 'uit'}")
+    return config.say(f"The {_name(a)} is {'on' if on else 'off'}.", f"De {_name(a)} staat {'aan' if on else 'uit'}.")
 
 
 # --- Listening (the service): almost done / done ---
