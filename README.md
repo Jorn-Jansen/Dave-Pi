@@ -96,3 +96,7 @@ sudo systemctl restart dave
 
 Een natuurlijke stem: zet een Azure Speech-sleutel in `sudo dave setup` (gratis 500.000 tekens per maand). Zonder sleutel praat Dave
 met een offline stem.
+
+## Licentie
+
+[PolyForm Strict 1.0.0](LICENSE): je mag Dave downloaden en gebruiken voor persoonlijk, niet-commercieel gebruik; je mag hem niet veranderen, kopiëren, verder verspreiden of verkopen.
