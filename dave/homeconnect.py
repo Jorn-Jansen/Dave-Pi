@@ -134,7 +134,12 @@ def _call(method, path, body=None):
         if "Connection" in key or "NotConnected" in key or "Offline" in key:
             raise HomeConnectError(config.say("The appliance isn't connected right now: Home Connect only reaches it while it's switched on.",
                                               "Het apparaat is nu niet verbonden: Home Connect bereikt hem alleen als hij aan staat.")) from e
-        if "Remote" in key:
+        if "Remote" in key or "NotWritable" in key:  # (ProgramNotWritable: it doesn't take a program from outside now)
+            if "NotWritable" in key:
+                raise HomeConnectError(config.say("It doesn't take a program from outside right now: close the door, press remote start on the appliance "
+                                                  "(the button with the Wi-Fi / remote sign, its light goes on), then ask again.",
+                                                  "Hij neemt nu geen programma van buitenaf aan: doe de deur dicht, druk op de vaatwasser op 'op afstand starten' "
+                                                  "(de knop met het wifi- of afstandsteken, het lampje gaat aan) en vraag het dan nog eens.")) from e
             raise HomeConnectError(config.say("Remote start is off on the appliance: switch it on there (often a button with a Wi-Fi or remote sign), then try again.",
                                               "Op afstand starten staat uit op het apparaat: zet het daar aan (vaak een knop met een wifi- of afstandsteken) en probeer het opnieuw.")) from e
         if "Door" in key:
