@@ -60,10 +60,10 @@ def _note_limit(key, model, text):
 
 def _wait(text):
     """Groq's "try again in 10m5.2s" / "in 2.5s" → seconds."""
-    m = re.search(r"try again in (?:(\d+)h)?(?:(\d+)m)?(?:([0-9.]+)s)?", text)
+    m = re.search(r"try again in (?:(\d+)h)?(?:(\d+)m(?!s))?(?:([0-9.]+)(ms|s))?", text)
     if not m or not any(m.groups()):
         return None
-    return int(m.group(1) or 0) * 3600 + int(m.group(2) or 0) * 60 + float(m.group(3) or 0)
+    return int(m.group(1) or 0) * 3600 + int(m.group(2) or 0) * 60 + float(m.group(3) or 0) / (1000 if m.group(4) == "ms" else 1)
 
 
 def chat(messages, tools=None, search=True):
