@@ -351,7 +351,7 @@ def ask(text, on_action=None):
             answer = re.sub(r"\[\s*[a-zA-Z][a-zA-Z -]{1,20}?\s*\]\s*", "", (message.get("content") or "").strip())
             log.write(f"antwoord: {answer!r}")
             _history = (_history + [{"role": "user", "content": text}, {"role": "assistant", "content": answer}])[-12:]
-            answer = re.sub(r"[​-‍﻿]", "", answer).strip()  # (sometimes only an invisible character comes back)
+            answer = re.sub(r"[\u200b-\u200d\ufeff]", "", answer).strip()  # (sometimes only an invisible character comes back)
             return answer or config.say("Done.", "Klaar.")
         messages.append({"role": "assistant", "content": message.get("content") or "", "tool_calls": calls})
         for call in calls:
